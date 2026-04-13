@@ -1,0 +1,73 @@
+# Initial tradeable + research universe for Phase 0/1.
+# Keep this narrow; expand once ingestion & signals prove stable.
+
+us_sector_etfs:
+  - XLK   # Technology
+  - XLF   # Financials
+  - XLE   # Energy
+  - XLV   # Health Care
+  - XLI   # Industrials
+  - XLP   # Consumer Staples
+  - XLY   # Consumer Discretionary
+  - XLU   # Utilities
+  - XLRE  # Real Estate
+  - XLB   # Materials
+  - XLC   # Communication Services
+
+us_broad_etfs:
+  - SPY
+  - QQQ
+  - IWM
+  - DIA
+  - VTI
+
+us_factor_etfs:
+  - MTUM  # Momentum
+  - VLUE  # Value
+  - QUAL  # Quality
+  - USMV  # Min Vol
+  - SIZE  # Size
+
+us_commodity_etfs:
+  - GLD   # Gold
+  - SLV   # Silver
+  - USO   # Oil
+  - UNG   # Nat Gas
+  - DBC   # Broad commodities
+  - DBA   # Agriculture
+
+us_stocks_watchlist:
+  # Concentrated — these get deep LLM / options-structure coverage.
+  - AAPL
+  - MSFT
+  - NVDA
+  - GOOGL
+  - AMZN
+  - META
+  - TSLA
+  - AVGO
+  - AMD
+  - NFLX
+
+crypto_spot:
+  # ccxt symbol notation (base/quote).
+  - BTC/USDT
+  - ETH/USDT
+  - SOL/USDT
+  - BNB/USDT
+  - XRP/USDT
+  - DOGE/USDT
+  - AVAX/USDT
+  - LINK/USDT
+  - MATIC/USDT
+  - DOT/USDT
+
+fred_series:
+  - DGS2          # 2Y Treasury
+  - DGS10         # 10Y Treasury
+  - T10Y2Y        # 10Y-2Y spread
+  - DFF           # Fed Funds effective
+  - CPIAUCSL      # Headline CPI
+  - UNRATE        # Unemployment
+  - VIXCLS        # VIX close
+  - DCOILWTICO    # WTI crude

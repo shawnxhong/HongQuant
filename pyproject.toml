@@ -1,0 +1,87 @@
+[project]
+name = "hongquant"
+version = "0.1.0"
+description = "Personal mid-low frequency quant system (US equities/ETF + crypto)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "shawnxhong" }]
+
+dependencies = [
+    # Core
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "pyarrow>=16",
+    "duckdb>=1.1",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "pyyaml>=6.0",
+    "loguru>=0.7",
+    "httpx>=0.27",
+    "tenacity>=9.0",
+    "python-dotenv>=1.0",
+    # Orchestration
+    "prefect>=3.0",
+    # Market data adapters
+    "alpaca-py>=0.30",
+    "yfinance>=0.2.40",
+    "ccxt>=4.3",
+    "edgartools>=3.0",
+    "fredapi>=0.5",
+]
+
+[project.optional-dependencies]
+# Installed on demand — not pulled by `uv sync` default
+ibkr = ["ib_async>=1.0"]
+research = [
+    "vectorbt>=0.26",
+    "backtrader>=1.9",
+    "pandas-ta>=0.3.14b",
+    "alphalens-reloaded>=0.4.5",
+    "quantstats>=0.0.64",
+]
+portfolio = ["pyportfolioopt>=1.5", "riskfolio-lib>=6.0"]
+options = ["py-vollib>=1.0.1", "py-lets-be-rational>=1.0.1"]
+llm = ["langchain>=0.3", "langchain-anthropic>=0.3", "lancedb>=0.13", "unstructured>=0.15", "pdfplumber>=0.11"]
+dashboard = ["streamlit>=1.38", "matplotlib>=3.9"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "mypy>=1.11",
+    "pandas-stubs>=2.2",
+    "types-PyYAML>=6.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hongquant"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["notebooks", "data", "ref"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "C4", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B", "SIM"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+asyncio_mode = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+strict = false
+ignore_missing_imports = true
+warn_unused_ignores = true
+exclude = ["notebooks", "data", "ref"]
