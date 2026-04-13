@@ -1,1 +1,2 @@
 claude --resume "quant"
+codex --resume "codex_suggestion_hongquant"
