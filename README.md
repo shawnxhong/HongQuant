@@ -4,6 +4,8 @@ Personal mid-low-frequency quant system covering US equities/ETFs and crypto, wi
 
 See `plans/` for the phased build plan. Phase 0 scaffolding: package layout, DuckDB/Parquet data lake, adapters for Alpaca / yfinance / ccxt / SEC EDGAR / FRED, and Prefect flows for daily/hourly ingestion.
 
+For a concise description of why this repo exists, what is implemented today, and what it is intended to become, see [docs/repo-purpose.md](/home/hong/HongQuant/docs/repo-purpose.md).
+
 ## Quick start
 
 ```bash

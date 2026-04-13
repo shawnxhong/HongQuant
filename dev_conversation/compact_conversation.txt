@@ -1,0 +1,126 @@
+HongQuant compact dev conversation summary
+Date: 2026-04-13
+
+Purpose
+- Personal mid/low-frequency quant system.
+- Initial target coverage: US equities/ETFs, crypto, and later A-share/ETF support.
+- Execution style: semi-automatic. System generates signals and recommendations; user decides how to place trades.
+- Constraint: single-operator project, so infrastructure should stay lightweight and reuse mature open-source tools.
+
+Core decisions from the original conversation
+- Prioritize a maintainable Python stack over heavy institutional infrastructure.
+- Build data and research foundations first; do not start with full automated execution.
+- Keep a unified abstraction across markets where possible; split only at adapters and execution endpoints.
+- Run quantitative price/volume research and LLM-assisted research in parallel, then merge them later at portfolio decision time.
+- Use TradingView as a charting/prototyping/alert source, not as the primary data source or final backtesting engine.
+
+Recommended architecture agreed in the conversation
+- Data layer: market data, macro data, filings, alternative inputs.
+- Research layer:
+  - B1 quantitative strategies, factors, and backtests
+  - B2 LLM earnings/filings valuation and recommendation pipeline
+- Decision layer: risk control, portfolio construction, target weights.
+- Delivery layer: daily reports, notifications, position suggestions.
+
+Recommended infrastructure choices
+- Language/tooling: Python + uv + ruff + pytest.
+- Data storage: Parquet + DuckDB for historical research data.
+- Metadata/ops storage: Postgres optional.
+- Orchestration: Prefect.
+- Notifications: Telegram or Feishu webhook.
+- LLM memory/retrieval: LanceDB.
+- Dashboard later: Streamlit.
+
+Recommended reusable open-source components
+- US market data: Alpaca, yfinance, SEC EDGAR.
+- Crypto market data: ccxt.
+- Macro data: FRED.
+- Research/backtest: vectorbt first, Backtrader optional, Qlib as a possible research layer.
+- Portfolio optimization: PyPortfolioOpt.
+- LLM pipeline: LangChain or similar orchestration around filing ingestion and valuation logic.
+
+TradingView conclusion
+- Use it for charting, Pine prototypes, and alerts to webhook.
+- Do not use it as the system's core data source.
+- Do not rely on it as the canonical backtest engine.
+
+Planned phased roadmap from the conversation
+- Phase 0: scaffold package, data lake, adapters, flows, tests, CI.
+- Phase 1: first quantitative signal loop, likely CTA/cross-sectional momentum plus risk controls and target weights.
+- Phase 2: LLM filing/valuation pipeline and recommendation synthesis.
+- Phase 3: TradingView webhook integration, dashboard, and possible execution upgrades.
+
+What was actually implemented in the repo during that session
+- Python package scaffold under `hongquant/`.
+- `pyproject.toml` with core dependencies and optional extras for research, portfolio, options, llm, ibkr, dashboard.
+- `hongquant/config.py` for environment-based settings.
+- `hongquant/logging.py` for Loguru logging setup.
+- `hongquant/notify.py` for Telegram Bot HTTP notifications.
+- Canonical OHLCV schema and validation in `hongquant/data/schema.py`.
+- Parquet + DuckDB lakehouse storage in `hongquant/data/store.py`.
+- Adapters:
+  - `hongquant/data/adapters/alpaca.py`
+  - `hongquant/data/adapters/yfinance_.py`
+  - `hongquant/data/adapters/ccxt_.py`
+  - `hongquant/data/adapters/edgar.py`
+  - `hongquant/data/adapters/fred.py`
+- Flows:
+  - `hongquant/flows/daily_equities.py`
+  - `hongquant/flows/hourly_crypto.py`
+- Universe definition in `configs/universe.yaml`.
+- Tests for schema, store, and universe loading.
+- CI/tooling alignment for Python 3.12.
+
+Validation completed in that session
+- `uv sync --group dev` succeeded.
+- `ruff check .` passed after fixes.
+- `pytest -q` passed with 7/7 tests.
+- Package import smoke check succeeded.
+
+Notable implementation details
+- The data lake writes OHLCV bars partitioned by market, asset type, interval, and year.
+- Writes are idempotent by `(symbol, ts)`.
+- Daily equities flow uses Alpaca as primary source and yfinance as fallback/backfill option.
+- Hourly crypto flow uses ccxt.
+- FRED and EDGAR adapters exist as research inputs but are not yet wired into full downstream pipelines.
+- Many package namespaces such as `backtest`, `factors`, `strategies`, `portfolio`, `llm`, and `report` are placeholders for future phases.
+
+Current repo purpose as of the latest follow-up
+- The repo is best understood as an early-stage personal quant infrastructure project.
+- Its current implemented value is the data ingestion/storage/orchestration foundation, not finished strategy logic or live execution.
+
+Documentation added after the original session
+- Added `docs/repo-purpose.md` to explain:
+  - why the repo exists
+  - what is implemented today
+  - what is planned but not built yet
+- Linked that doc from `README.md`.
+
+Current repo status relevant to a future resume
+- Modified: `README.md`
+- Added: `docs/repo-purpose.md`
+- Untracked local helper file: `dev_conversation/session_name`
+
+Best next steps when resuming
+1. Decide the next build target:
+   - first quantitative strategy loop, or
+   - options-structure signal layer, or
+   - LLM filing/valuation pipeline
+2. If starting with live data smoke tests, fill `.env` at least for:
+   - `ALPACA_API_KEY`
+   - `ALPACA_API_SECRET`
+   - `EDGAR_USER_AGENT`
+   - optional Telegram and FRED keys
+3. Run one ingestion smoke test:
+   - `uv run python -m hongquant.flows.daily_equities --symbols SPY,QQQ,AAPL`
+4. Then move into Phase 1 implementation.
+
+How to brief another CLI cheaply
+- Load this file and `docs/repo-purpose.md`.
+- Mention that Phase 0 data infrastructure is implemented and tested.
+- Mention that the next meaningful product decision is which Phase 1 path to build first.
+
+Compact resume prompt
+Use the following with any coding CLI:
+
+"Read `dev_conversation/2026-04-13-152913-local-command-caveatcaveat-the-messages-below.txt` and `docs/repo-purpose.md` first. This repo is HongQuant, a personal mid/low-frequency quant system. Phase 0 data infrastructure is implemented: canonical OHLCV schema, Parquet+DuckDB lakehouse, Alpaca/yfinance/ccxt/EDGAR/FRED adapters, Prefect flows, universe config, tests, and CI. The original design intent is semi-automatic trading, open-source-heavy infrastructure, TradingView only as auxiliary charting/alerts, and later addition of strategies, portfolio construction, and an LLM filing/valuation pipeline. Continue from that state."
