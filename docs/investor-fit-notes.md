@@ -12,7 +12,6 @@ These notes are for the current owner/operator of HongQuant:
 - not strongly profitable yet
 - but capital preservation has been solid, with no total drawdown worse than about `10%`
 
-
 ## High-Level Assessment
 
 HongQuant can be genuinely useful if it becomes a system for:
@@ -26,7 +25,6 @@ HongQuant can be genuinely useful if it becomes a system for:
 HongQuant will not create alpha by itself.
 Its value is in improving decision quality, risk allocation, and consistency.
 
-
 ## What Matters Most For This Investor
 
 The strongest signal is not raw profitability yet, but survival and drawdown control.
@@ -39,7 +37,6 @@ The probable bottlenecks are:
 - insufficient concentration when odds are unusually favorable
 - too much time spent on research infrastructure that does not improve actual decisions
 
-
 ## What HongQuant Should Do
 
 For this investor profile, the system should primarily:
@@ -49,7 +46,6 @@ For this investor profile, the system should primarily:
 3. improve bet sizing and portfolio concentration
 4. reduce avoidable mistakes
 5. support patient decision-making rather than increase activity
-
 
 ## What To Build First
 
@@ -62,7 +58,6 @@ Highest expected ROI:
 - watchlist workflow and execution checklist
 - earnings / filing summarization only for a very small number of US names actually followed
 
-
 ## What To Delay Or Cut
 
 Lower expected ROI at the current stage:
@@ -73,7 +68,6 @@ Lower expected ROI at the current stage:
 - wide stock coverage without real follow depth
 - options-structure analytics before core spot/equity process is proven
 - research features that increase activity without improving selectivity
-
 
 ## Working Principle
 
@@ -93,7 +87,6 @@ The right outcome is:
 - stronger review of mistakes
 - stronger concentration when conviction is justified
 
-
 ## Practical Build Order
 
 Recommended order for this repo:
@@ -110,7 +103,6 @@ Only after those work in practice should the repo expand into:
 - options overlays
 - richer LLM agents
 - additional markets
-
 
 ## Concrete Recommendation For The Current Operator
 
@@ -130,7 +122,6 @@ The narrow strategy loop should be only one of:
 
 Do not try to industrialize both at once until one loop is demonstrably useful.
 
-
 ## Concrete Recommendation On What To Cut Or Delay
 
 Until a repeatable edge is measured, delay or cut:
@@ -144,7 +135,6 @@ Until a repeatable edge is measured, delay or cut:
 - TradingView webhook integration
 - any feature whose main effect is increasing trade frequency
 
-
 ## Short Rule
 
 Build in this sequence:
@@ -154,7 +144,6 @@ Build in this sequence:
 - one narrow edge loop
 
 Cut almost everything else until those three are working in practice.
-
 
 ## Summary
 

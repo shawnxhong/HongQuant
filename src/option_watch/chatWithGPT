@@ -1,0 +1,889 @@
+{
+    me: "
+        有什么办法可以查到SPY QQQ期权到期量的数据，我想提前在IV特别大的那个周五的周三提前把动量股卖了，防止被动量崩盘给砸到。
+    ",
+    gpt: "
+        可以查，但先把概念拆清楚：
+
+        ## 1. 你真正要看的不是“到期量”，而是这几类
+
+        | 指标                                |   能否提前看到 | 用途                          |
+        | --------------------------------- | -------: | --------------------------- |
+        | **Open Interest / 未平仓量**          |    可以提前看 | 判断某个周五有多少期权会到期，是最接近“到期量”的指标 |
+        | **Volume / 当日成交量**                |   不能提前知道 | 只能当天逐步形成，用来判断资金正在交易什么       |
+        | **ATM IV / 近月隐含波动率**              |    可以实时看 | 判断市场是否在给某个到期日定价大波动          |
+        | **IV Term Structure**             |    可以提前看 | 看这个周五是否比下周、下下周异常贵           |
+        | **Gamma Exposure / Dealer Gamma** | 通常要第三方估算 | 判断是否容易出现“砸盘 / 挤压 / pin住”    |
+        | **Put/Call OI、Put/Call Volume**   |      可以看 | 判断保护盘、投机盘、方向压力              |
+
+        你的策略目标是：**在周三提前识别本周五是不是一个高风险 OpEx 周五**。
+        所以核心不是“SPY/QQQ成交量大不大”，而是：
+
+        > 本周五到期的 SPY / QQQ / SPX / NDX 期权未平仓量是否异常大，并且本周五 ATM IV 是否明显高于后续到期日。
+
+        ---
+
+        ## 2. 数据源怎么查
+
+        ### A. 你已经用 IBKR，最方便的是 TWS / GlobalTrader
+
+        IBKR 的 OptionTrader 可以直接看每个合约的 **IV、Greeks、Open Interest**；GlobalTrader 的 Option Chain 详细列也支持 **IV、IV change%、Open Interest、Volume、Bid/Ask** 等字段。([Interactive Brokers][1])
+
+        你可以这样看：
+
+        1. 打开 **QQQ Option Chain** 和 **SPY Option Chain**。
+        2. 选择本周五到期日。
+        3. 打开详细列：
+
+        * IV
+        * Delta
+        * Gamma
+        * Volume
+        * Open Interest
+        4. 按 Strike 分布看：
+
+        * 当前价格附近的 OI 是否很密集；
+        * 大量 call OI 是否集中在上方；
+        * 大量 put OI 是否集中在下方；
+        * ATM / 近 ATM IV 是否比下周五明显高。
+
+        缺点：IBKR更适合手动看，不太适合直接一眼看“本周五总 OI / 总 Gamma 风险”。
+
+        ---
+
+        ### B. Barchart：看每个到期日 Put/Call 和当日交易活跃度
+
+        Barchart 的 Put/Call Ratio 页面会按所有开放到期日展示 put/call 汇总，volume 是当前交易日成交量，数据延迟约 25–30 分钟并约每 5 分钟更新。([Barchart.com][2])
+
+        用途：
+
+        * 快速看本周五 SPY / QQQ 的 Put/Call 是否异常；
+        * 看本周五到期是否比其他周明显活跃；
+        * 周三盘中可以看成交量是否开始放大。
+
+        ---
+
+        ### C. OptionCharts：看按到期日汇总的 Volume、OI、IV
+
+        OptionCharts 对 SPY / QQQ 这类标的比较方便，它的期权总览表按 expiration 展示 **Volume、Open Interest、Implied Volatility**。搜索结果显示它有 QQQ、SPY 的到期日分组表。([OptionCharts][3])
+
+        用途：
+
+        * 快速看本周五 vs 下周五；
+        * 适合你想做“周三判断周五风险”的表格化观察；
+        * 比 IBKR 手动翻链条更直观。
+
+        ---
+
+        ### D. Cboe / OCC：官方数据源
+
+        OCC 有 Open Interest、Volume 等市场数据报告，是美国上市期权清算层面的官方来源。([theocc.com][4])
+        Cboe 的 Daily Market Statistics 提供期权市场成交量、未平仓量等统计，页面上也显示各大类期权的 volume 和 open interest。([Cboe Global Markets][5])
+
+        用途：
+
+        * 官方验证；
+        * 做历史研究；
+        * 不一定是最适合日内交易决策的界面。
+
+        ---
+
+        ### E. 付费或半付费：Market Chameleon / SpotGamma / GammaEdge / SqueezeMetrics
+
+        这类更适合你想做的事情：
+
+        * IV Rank / IV Percentile；
+        * IV Term Structure；
+        * Call Wall / Put Wall；
+        * Dealer Gamma Exposure；
+        * 关键 strike gamma 集中区；
+        * OpEx 风险提示。
+
+        Market Chameleon 有 SPY/QQQ 的 IV 页面、Option Summary、Open Interest Trends 等，搜索结果显示它会展示 IV、Open Interest trends、每个 expiration 的 option statistics。([市场变色龙][6])
+
+        如果你要把这个策略系统化，**Gamma 数据比单纯 OI 更有价值**。
+
+        ---
+
+        ## 3. 我的建议：你的判断框架可以这样做
+
+        每周三收盘前检查：
+
+        ### 第一层：看本周五是不是“特殊到期日”
+
+        重点看：
+
+        * 月度 OpEx，通常是每月第三个周五；
+        * 季度 OpEx / Triple Witching；
+        * CPI、FOMC、NFP、重大财报集中周；
+        * VIX / VVIX 是否异常高；
+        * NVDA、MSFT、AAPL、META、AMZN、GOOGL、TSLA 等权重股是否有财报或重大事件。
+
+        如果只是普通周五，风险未必值得你提前卖动量股。
+
+        ---
+
+        ### 第二层：看 IV Term Structure
+
+        你要找的是这种形态：
+
+        | 到期日 | ATM IV |
+        | --- | -----: |
+        | 本周五 |     很高 |
+        | 下周五 |    明显低 |
+        | 再下周 |    更平稳 |
+
+        这说明市场在给**本周五单独定价事件风险**。
+
+        可以用一个简单规则：
+
+        > 如果本周五 ATM IV 比下周五高 20%–30% 以上，且本周五 OI 很大，这个周五就值得警惕。
+
+        Barchart 对 volatility term structure 的说明也强调，ATM IV across expirations 可以用于判断不同到期日的波动预期；backwardation / contango 的形态能反映市场对近期风险的定价。([Barchart.com][7])
+
+        ---
+
+        ### 第三层：看本周五 OI 是否异常集中
+
+        不要只看总 OI，要看集中在哪些 strike：
+
+        * **大量 call OI 集中在现价上方**：如果市场冲不上去，容易被压制；如果突破，可能 squeeze。
+        * **大量 put OI 集中在现价下方**：跌破后容易加速，也可能形成支撑。
+        * **现价附近 OI 极大**：容易出现 pinning，指数被钉在某个区间。
+        * **SPY、QQQ、SPX、NDX 同时有大 OI**：风险权重更高。
+
+        注意：SPX / NDX 的机构影响通常比 SPY / QQQ 更大。你只看 SPY、QQQ 会漏掉一部分真正的指数期权压力。
+
+        ---
+
+        ## 4. 你这个“周三提前卖动量股”的策略，逻辑上成立，但不能只靠 IV
+
+        你的假设是：
+
+        > 如果本周五 IV 特别大，周三提前减仓动量股，避免周五前后被动量崩盘砸到。
+
+        这个思路有合理性，尤其是当市场处于：
+
+        * 高估值 AI / 半导体 / 高 beta 拥挤交易；
+        * QQQ 明显弱于 SPY；
+        * 市场宽度恶化；
+        * VIX 上行；
+        * 本周五 QQQ / NDX 期权 OI 和 gamma 风险大；
+        * 本周五 ATM IV 异常高。
+
+        但不要简单变成：
+
+        > IV 高 → 周三清仓动量股。
+
+        更好的规则是：
+
+        ## 5. 一个可执行的减仓规则
+
+        你可以设一个三档信号。
+
+        ### 低风险：不动
+
+        满足以下情况：
+
+        * 本周五 IV 没有明显高于下周；
+        * OI 不异常；
+        * QQQ 仍强于 SPY；
+        * 动量股继续创新高；
+        * 市场宽度没有恶化。
+
+        操作：不因为 OpEx 单独卖。
+
+        ---
+
+        ### 中风险：减 20%–30%
+
+        满足 2–3 个条件：
+
+        * 本周五 QQQ/SPY ATM IV 明显高于下周；
+        * 本周五 OI 高于最近 8–12 周平均；
+        * QQQ 开始弱于 SPY；
+        * Mag 7 / 半导体动能走弱；
+        * put/call volume 抬升；
+        * VIX 上行但指数还没跌。
+
+        操作：周三或周四减一部分高 beta、涨幅大的动量股。
+
+        ---
+
+        ### 高风险：减 40%–60%，但不必全清
+
+        满足 4 个以上条件：
+
+        * 本周五 IV term structure 明显倒挂；
+        * 本周五 OI / Gamma 集中度极高；
+        * QQQ 跌破短期趋势线；
+        * NVDA / SOXX / SMH 转弱；
+        * 市场宽度显著恶化；
+        * VIX、VVIX 同时上行；
+        * 大量 call-heavy 动量股开始放量滞涨。
+
+        操作：主动降风险，尤其减掉：
+
+        * 涨幅最大；
+        * 估值最贵；
+        * 对 QQQ / 半导体 beta 最大；
+        * 已经跌破 10 日线或 20 日线；
+        * 财报后没有继续上攻的票。
+
+        ---
+
+        ## 6. 最实用的工具组合
+
+        我建议你按这个组合来：
+
+        | 用途                                    | 工具                                     |
+        | ------------------------------------- | -------------------------------------- |
+        | 手动看 SPY/QQQ 链条                        | IBKR TWS OptionTrader                  |
+        | 看每个到期日 OI / Volume / IV               | OptionCharts                           |
+        | 看 Put/Call by expiration              | Barchart                               |
+        | 看 IV Rank / IV Term Structure         | Market Chameleon / Barchart            |
+        | 看官方 OI/Volume                         | OCC / Cboe                             |
+        | 看 dealer gamma / call wall / put wall | SpotGamma / GammaEdge / SqueezeMetrics |
+
+        如果你只想先用免费/低成本方式：
+
+        > **IBKR + Barchart + OptionCharts** 已经够你做第一版判断。
+
+        ---
+
+        ## 7. 我的最终看法
+
+        你的思路方向对，但指标要升级：
+
+        > 不要只盯“SPY / QQQ 期权到期量”。
+        > 应该盯 **本周五到期 OI + ATM IV 倒挂 + Gamma 集中度 + QQQ 相对强弱 + 市场宽度**。
+
+        最关键的触发条件是：
+
+        ```text
+        本周五 ATM IV 明显高于下周
+        +
+        本周五 SPY/QQQ/SPX/NDX 到期 OI 异常大
+        +
+        QQQ / 动量股已经开始弱于大盘
+        ```
+
+        这三个同时出现时，周三提前减动量股是合理的。
+        如果只有“IV 高”，但 QQQ 仍强、动量股继续扩散、市场宽度健康，那更可能只是市场在定价事件风险，不一定等于动量崩盘。
+    ",
+    me: "
+        我想搭一个agent，每天定时任务做以上检查，并邮件提醒我本周异动。你觉得这个是否合理是否有价值。如果是，请给我列出具体的feature列表，信息源，我随后会找claude 做具体开发。
+    ",
+    gpt: "
+        ## 结论：合理，有价值，但要定位成“风险雷达”，不是“自动卖出信号”
+
+        这个 agent 值得做。
+        你的策略核心不是预测周五一定崩，而是提前识别：
+
+        > **本周五是否存在期权到期压力 + IV 异常 + 动量股脆弱性叠加。**
+
+        这类系统对你有价值，尤其是你交易风格偏趋势、持有高 beta / AI / 半导体 / 动量股时。它可以防止你在 **OpEx、CPI、FOMC、财报集中周、0DTE 活跃周**里无意识暴露过大仓位。
+
+        但它不能只看 SPY / QQQ 的“到期量”。更完整的风险源应该包括：
+
+        * SPY / QQQ；
+        * SPX / NDX；
+        * SMH / SOXX；
+        * VIX；
+        * 你的动量股 watchlist；
+        * 本周宏观事件；
+        * IV term structure；
+        * OI / volume / gamma 集中度。
+
+        OI 是核心，但它通常反映上一交易日收盘后确认的数据，不是实时成交量；OCC 和其他数据源主要提供 volume / open interest 这类市场数据报告，OI 本身是清算后统计口径。([OCC][1])
+
+        ---
+
+        # 1. Agent 的核心目标
+
+        建议定义为：
+
+        > 每个交易日自动扫描 SPY / QQQ / SPX / NDX / SMH / SOXX 的期权到期结构、IV 异常、OI/Gamma 集中度、市场动量脆弱性，并在本周存在“动量崩盘风险”时邮件提醒。
+
+        不要让 agent 输出“买/卖”。
+        更好的输出是：
+
+        ```text
+        本周 OpEx 风险等级：Low / Medium / High / Extreme
+        建议动作：观察 / 小幅降风险 / 主动降风险 / 禁止加仓
+        主要原因：IV 倒挂、OI 异常、Gamma 集中、QQQ 转弱、事件风险
+        ```
+
+        ---
+
+        # 2. MVP Feature 列表
+
+        ## A. 每日定时任务
+
+        建议时间：
+
+        | 时间                  | 任务                     |
+        | ------------------- | ---------------------- |
+        | 美东 08:00 / 美西 05:00 | 拉取前一日 OI、宏观事件、VIX、期权结构 |
+        | 美东 11:30 / 美西 08:30 | 盘中第一轮 IV / volume 异动扫描 |
+        | 美东 15:30 / 美西 12:30 | 收盘前风险提醒                |
+        | 周三美东 15:30          | 重点发送“本周五 OpEx 风险邮件”    |
+        | 周五美东 10:30          | 发送“今日到期压力更新”           |
+
+        你最关心的是周三提前处理动量股，所以 **周三收盘前邮件**是 MVP 的核心。
+
+        ---
+
+        ## B. 标的池
+
+        ### 必须监控
+
+        ```text
+        SPY
+        QQQ
+        SPX
+        NDX
+        SMH
+        SOXX
+        VIX
+        ```
+
+        ### 可选监控
+
+        ```text
+        IWM
+        DIA
+        ARKK
+        NVDA
+        TSLA
+        META
+        MSFT
+        AMZN
+        GOOGL
+        AVGO
+        AMD
+        PLTR
+        ```
+
+        原因：
+        SPY / QQQ 是 ETF 交易压力；SPX / NDX 更接近机构指数期权压力；SMH / SOXX 反映半导体动量；NVDA、AVGO、AMD、PLTR 等是动量崩盘时经常被砸的高 beta 标的。
+
+        ---
+
+        ## C. 到期日扫描
+
+        每个交易日自动找：
+
+        ```text
+        nearest Friday expiry
+        next Friday expiry
+        monthly OpEx expiry
+        quarterly OpEx expiry
+        all expiries within 21 days
+        ```
+
+        输出：
+
+        | 指标                 | 说明                     |
+        | ------------------ | ---------------------- |
+        | target_expiry      | 本周五到期日                 |
+        | dte                | 距到期天数                  |
+        | total_call_oi      | 本周五 call OI            |
+        | total_put_oi       | 本周五 put OI             |
+        | total_oi           | call + put OI          |
+        | put_call_oi_ratio  | put OI / call OI       |
+        | total_volume       | 当日成交量                  |
+        | volume_oi_ratio    | 当日成交量 / OI             |
+        | near_atm_oi        | 现价 ±2% 范围内 OI          |
+        | max_call_oi_strike | call OI 最大行权价          |
+        | max_put_oi_strike  | put OI 最大行权价           |
+        | max_pain_estimate  | 粗略 max pain            |
+        | oi_vs_12w_avg      | 本周五 OI 相对过去 12 周同类周五均值 |
+
+        ---
+
+        ## D. IV Term Structure 模块
+
+        这是最重要的模块之一。
+
+        每个标的计算：
+
+        ```text
+        front_week_atm_iv
+        next_week_atm_iv
+        third_week_atm_iv
+        30d_iv
+        iv_rank_1y
+        iv_percentile_1y
+        front_iv_premium = front_week_atm_iv / next_week_atm_iv - 1
+        ```
+
+        重点信号：
+
+        | 信号                         | 含义           |
+        | -------------------------- | ------------ |
+        | front IV 明显高于 next week IV | 市场在给本周事件单独定价 |
+        | front IV premium > 20%     | 警惕           |
+        | front IV premium > 35%     | 高风险          |
+        | front IV premium > 50%     | 极端风险         |
+        | IV Rank > 70               | 波动率整体偏贵      |
+        | IV Rank > 85               | 极端事件周        |
+
+        Tradier 的 options chain API 可以返回期权链，并包含 Greeks / IV 数据；其 quotes 文档也列出 open interest、bid/mid/ask IV、Greeks 等字段。([Tradier API][2])
+        Polygon 的 option chain snapshot 也提供每个合约的 Greeks、implied volatility、open interest、quotes 和 trades。([Polygon][3])
+        如果你想更认真做 IV surface / term structure，ORATS 的 API 会更合适，它明确提供 IV surface、term structure、IV rank / percentile 等波动率数据。([ORATS][4])
+
+        ---
+
+        ## E. Gamma / Strike 集中度模块
+
+        MVP 可以先做简化版，不必一开始追求精确 dealer gamma。
+
+        ### 需要计算
+
+        ```text
+        gamma_notional_by_strike
+        call_gamma_by_strike
+        put_gamma_by_strike
+        near_atm_gamma_concentration
+        top_5_gamma_strikes
+        distance_to_largest_gamma_strike
+        ```
+
+        简化公式可以先用：
+
+        ```text
+        gamma_exposure ≈ OI × 100 × gamma × spot² × 0.01
+        ```
+
+        含义是：标的价格变动 1% 时，对应的 delta 调整规模估计。
+
+        ### 邮件里重点展示
+
+        | 字段                          | 说明                   |
+        | --------------------------- | -------------------- |
+        | largest_gamma_strike        | 最大 gamma 聚集价位        |
+        | spot_distance_to_gamma_wall | 当前价距离 gamma wall 多远  |
+        | put_wall                    | put OI / gamma 最大位置  |
+        | call_wall                   | call OI / gamma 最大位置 |
+        | gamma_concentration_score   | gamma 集中度评分          |
+
+        注意：
+        不要过度声称“dealer 一定会买/卖”。真实 dealer positioning 需要判断客户方向、开仓/平仓、买方/卖方，很难从公开 OI 完全还原。MVP 里更稳妥的说法是 **“gamma concentration risk”**，不是“dealer 必然行为”。
+
+        ---
+
+        ## F. 盘中 Flow 异动模块
+
+        周三当天新增仓位不能提前从 OI 看到，所以需要看 volume。
+
+        ### 指标
+
+        ```text
+        same_day_option_volume
+        volume_to_oi_ratio
+        call_volume
+        put_volume
+        put_call_volume_ratio
+        atm_volume_spike
+        otm_put_volume_spike
+        otm_call_volume_spike
+        ```
+
+        ### 重点规则
+
+        | 信号                     | 解释            |
+        | ---------------------- | ------------- |
+        | volume / OI > 0.5      | 当天交易活跃        |
+        | volume / OI > 1.0      | 很可能有新信息或短线投机  |
+        | OTM put volume 激增      | 保护盘或恐慌定价      |
+        | OTM call volume 激增     | squeeze 或投机过热 |
+        | ATM straddle volume 激增 | 市场在买事件波动      |
+
+        Alpha Vantage 的 options 文档也提到 volume-to-open-interest ratio 可用于识别相对已有持仓的交易活跃度。([Alpha Vantage][5])
+
+        ---
+
+        ## G. 市场动量脆弱性模块
+
+        你真正关心的是“动量股会不会被砸”。所以不能只看期权，还要看动量本身。
+
+        ### 指标
+
+        ```text
+        QQQ / SPY 5d relative return
+        QQQ / SPY 20d relative return
+        SMH / QQQ 5d relative return
+        NVDA / QQQ 5d relative return
+        MAG7 equal-weight / QQQ relative return
+        advance_decline_ratio
+        new_high_new_low_ratio
+        percentage_above_20dma
+        percentage_above_50dma
+        ```
+
+        ### 风险判断
+
+        | 条件                     | 风险含义       |
+        | ---------------------- | ---------- |
+        | QQQ 弱于 SPY             | 科技动量退潮     |
+        | SMH 弱于 QQQ             | 半导体开始拖累    |
+        | NVDA / AVGO / AMD 放量滞涨 | AI 主线有分歧   |
+        | QQQ 创高但市场宽度下降          | 指数被少数权重股硬拉 |
+        | 高 beta 股先跌             | 动量崩盘早期信号   |
+
+        ---
+
+        ## H. 事件日历模块
+
+        必须接入：
+
+        | 事件                 | 数据源                                        |
+        | ------------------ | ------------------------------------------ |
+        | FOMC               | Federal Reserve 官方日历                       |
+        | CPI                | BLS 官方 CPI release schedule                |
+        | 非农 NFP             | BLS release schedule                       |
+        | PPI                | BLS release schedule                       |
+        | 财报                 | Nasdaq Data Link / Zacks / 其他 earnings API |
+        | 月度 OpEx            | 自己根据第三个周五生成                                |
+        | 季度 Triple Witching | 3/6/9/12 月第三个周五                            |
+
+        Federal Reserve 官网提供 FOMC meeting calendar；BLS 官网提供 CPI 等经济数据发布时间表。([联邦储备系统][6])
+
+        ---
+
+        # 3. 风险评分系统
+
+        建议做一个 0–100 分的 **Momentum Crash Risk Score**。
+
+        ## 评分建议
+
+        | 模块                       | 权重 |
+        | ------------------------ | -: |
+        | IV term structure 异常     | 25 |
+        | 本周五 OI / gamma 集中        | 25 |
+        | 盘中 option volume 异动      | 15 |
+        | QQQ / SMH / 动量股相对弱势      | 20 |
+        | 宏观 / 财报 / OpEx 事件        | 10 |
+        | VIX / VVIX / credit risk |  5 |
+
+        ## 风险等级
+
+        |     分数 | 等级      | 含义              |
+        | -----: | ------- | --------------- |
+        |   0–30 | Low     | 正常波动            |
+        |  31–50 | Medium  | 需要观察            |
+        |  51–70 | High    | 应考虑降风险          |
+        | 71–100 | Extreme | 不适合继续加高 beta 仓位 |
+
+        ---
+
+        # 4. 邮件提醒 Feature
+
+        ## 邮件标题
+
+        ```text
+        [OpEx Risk: HIGH] QQQ front IV +32%, Friday OI 1.8x avg, SMH weakening
+        ```
+
+        ## 邮件正文结构
+
+        ```text
+        1. 本周风险等级：High
+
+        2. 核心结论：
+        本周五 QQQ/SPY 到期压力偏高，QQQ 相对 SPY 走弱，SMH 开始弱于 QQQ。
+        若你持有高 beta / AI / 半导体动量股，本周三至周五不宜继续加仓。
+
+        3. 触发信号：
+        - QQQ front-week ATM IV: 38.2%
+        - QQQ next-week ATM IV: 27.5%
+        - Front IV premium: +38.9%
+        - QQQ Friday OI vs 12w avg: 1.7x
+        - SPY Friday OI vs 12w avg: 1.4x
+        - SMH/QQQ 5d relative return: -2.1%
+        - VIX 5d change: +14%
+
+        4. 关键价位：
+        - QQQ spot: xxx
+        - Largest call gamma strike: xxx
+        - Largest put gamma strike: xxx
+        - Largest total gamma strike: xxx
+
+        5. 观察建议：
+        - 若 QQQ 跌破 5日/10日均线，风险升级
+        - 若 SMH 继续弱于 QQQ，优先减半导体动量仓
+        - 若 front IV 周四仍维持倒挂，周五波动风险较高
+        ```
+
+        ---
+
+        # 5. 信息源建议
+
+        ## 最推荐组合
+
+        | 用途                          | 推荐源                                    | 说明                                                  |
+        | --------------------------- | -------------------------------------- | --------------------------------------------------- |
+        | 期权链 / IV / Greeks / OI      | **Polygon.io**                         | API 结构清晰，option chain snapshot 包含 IV、Greeks、OI      |
+        | 期权链 / IV / Greeks / OI      | **Tradier**                            | options chain 可取期权链，Greeks/IV 来自 ORATS              |
+        | IV surface / term structure | **ORATS**                              | 更专业，适合做严肃 IV term structure                         |
+        | 官方 OI / volume 校验           | **OCC**                                | 官方 volume / open interest 报告                        |
+        | Cboe 市场统计                   | **Cboe**                               | Daily market statistics 提供 volume、open interest 等数据 |
+        | VIX                         | **Cboe / FRED**                        | FRED 提供 VIX daily series，Cboe 提供官方 VIX 数据           |
+        | FOMC                        | **Federal Reserve**                    | 官方 FOMC 日历                                          |
+        | CPI / NFP / PPI             | **BLS**                                | 官方经济数据 release schedule                             |
+        | 底层价格数据                      | Polygon / IBKR / Stooq / Yahoo Finance | 用于 QQQ/SPY/SMH/个股动量计算                               |
+        | 邮件                          | Gmail API / SMTP / SendGrid            | 发送每日提醒                                              |
+
+        Cboe 的 daily market statistics 页面说明其提供包括 volume、open interest、price movements 在内的交易统计；OCC 也提供 open interest、daily volume、weekly/monthly volume 等官方市场数据。([Cboe Global Markets][7])
+        IBKR TWS API 可以作为备用数据源，支持 TWS / IB Gateway、实时和历史市场数据；IBKR 也说明可以通过 API 获取 option implied volatility，TWS API 里有 model implied volatility 字段。([Interactive Brokers][8])
+
+        ---
+
+        # 6. 不建议的设计
+
+        ## 不建议 1：只看 SPY / QQQ
+
+        不够。
+        至少要加：
+
+        ```text
+        SPX
+        NDX
+        SMH
+        SOXX
+        VIX
+        ```
+
+        否则容易漏掉机构指数期权压力和半导体动量风险。
+
+        ---
+
+        ## 不建议 2：只看 OI
+
+        OI 是慢变量。
+        周三当天新增风险要靠：
+
+        ```text
+        volume
+        volume/OI
+        ATM IV变化
+        put/call volume
+        front IV premium
+        underlying price action
+        ```
+
+        ---
+
+        ## 不建议 3：让 agent 直接给交易指令
+
+        更稳妥的是：
+
+        ```text
+        风险等级 + 触发原因 + 观察价位 + 仓位建议区间
+        ```
+
+        比如：
+
+        ```text
+        High risk:
+        不建议继续追高；
+        已有动量仓可考虑降低 20%–40% beta；
+        等待周五后 IV crush / dealer positioning 消化。
+        ```
+
+        不要让系统直接发出：
+
+        ```text
+        卖出 NVDA
+        卖出 QQQ
+        清仓动量股
+        ```
+
+        这个容易过拟合，也容易把正常强趋势误判成风险。
+
+        ---
+
+        # 7. Claude 开发时可以直接用的 Feature Spec
+
+        你可以把下面这段给 Claude：
+
+        ```markdown
+        # Project: OpEx Momentum Risk Agent
+
+        ## Goal
+        Build a scheduled market-risk monitoring agent that checks SPY, QQQ, SPX, NDX, SMH, SOXX options expiration risk, IV term structure, open interest concentration, gamma concentration, intraday options flow, and momentum-stock fragility. The agent sends a daily email alert and a special Wednesday OpEx risk email.
+
+        ## Universe
+        Core tickers:
+        - SPY
+        - QQQ
+        - SPX
+        - NDX
+        - SMH
+        - SOXX
+        - VIX
+
+        Optional momentum watchlist:
+        - NVDA
+        - AVGO
+        - AMD
+        - MSFT
+        - META
+        - AMZN
+        - GOOGL
+        - TSLA
+        - PLTR
+        - ARM
+        - ANET
+        - CRWD
+        - MSTR
+
+        ## Data Sources
+        Preferred:
+        - Polygon.io Options Chain Snapshot API
+        - Tradier Options Chain API
+        - ORATS for IV surface / IV term structure if available
+        - OCC official open interest / volume data for validation
+        - Cboe daily market statistics
+        - FRED or Cboe for VIX
+        - Federal Reserve FOMC calendar
+        - BLS CPI / NFP / PPI release schedules
+        - Price data from Polygon / IBKR / Yahoo Finance / Stooq
+
+        ## Daily Schedule
+        Timezone: America/New_York
+        - 08:00 ET: load previous session OI, option chains, event calendar
+        - 11:30 ET: intraday IV and option volume scan
+        - 15:30 ET: pre-close risk scan
+        - Wednesday 15:30 ET: send weekly OpEx risk report
+        - Friday 10:30 ET: send same-day expiry pressure update
+
+        ## Key Metrics
+        For each core ticker:
+        - spot price
+        - target Friday expiration
+        - DTE
+        - total call OI
+        - total put OI
+        - put/call OI ratio
+        - total option volume
+        - volume/OI ratio
+        - ATM IV for front-week expiry
+        - ATM IV for next-week expiry
+        - front IV premium
+        - IV rank / IV percentile
+        - expected move from ATM straddle
+        - max call OI strike
+        - max put OI strike
+        - max total gamma strike
+        - gamma exposure approximation by strike
+        - near-ATM OI concentration
+        - near-ATM gamma concentration
+        - OI vs trailing 12-week average
+        - QQQ/SPY relative strength
+        - SMH/QQQ relative strength
+        - VIX 5d change
+        - momentum watchlist breadth
+
+        ## Risk Score
+        Compute a 0-100 Momentum Crash Risk Score:
+        - IV term structure abnormality: 25 points
+        - OI / gamma concentration: 25 points
+        - intraday volume / flow abnormality: 15 points
+        - QQQ / SMH / momentum weakness: 20 points
+        - event calendar risk: 10 points
+        - VIX regime: 5 points
+
+        Risk bands:
+        - 0-30: Low
+        - 31-50: Medium
+        - 51-70: High
+        - 71-100: Extreme
+
+        ## Email Report
+        Subject format:
+        [OpEx Risk: HIGH] QQQ front IV +32%, Friday OI 1.8x avg, SMH weakening
+
+        Body sections:
+        1. Overall risk level
+        2. Main conclusion
+        3. Triggered signals
+        4. IV term structure table
+        5. OI / gamma concentration table
+        6. Momentum fragility table
+        7. Event calendar this week
+        8. Suggested risk posture:
+        - Low: no action
+        - Medium: avoid new high-beta adds
+        - High: consider reducing 20-40% high-beta exposure
+        - Extreme: no chasing, actively reduce crowded momentum exposure
+        9. Top 3 things to watch tomorrow
+
+        ## Important Constraints
+        - Do not generate direct buy/sell orders.
+        - Treat open interest as previous-session data.
+        - Use intraday volume and IV change for same-day updates.
+        - Clearly distinguish data-driven signals from interpretation.
+        - Log all raw data snapshots for backtesting.
+        ```
+
+        ---
+
+        # 8. 最小可行版本建议
+
+        第一版不要做太复杂。
+        我建议先实现：
+
+        ## MVP v0.1
+
+        ```text
+        1. 每天抓 SPY、QQQ、SPX、NDX、SMH、SOXX 的 options chain
+        2. 计算本周五 vs 下周五 ATM IV
+        3. 计算本周五 total OI、put/call OI、near-ATM OI
+        4. 计算 volume/OI
+        5. 计算 QQQ/SPY、SMH/QQQ 5日相对强弱
+        6. 接入 FOMC、CPI、NFP、月度 OpEx 日期
+        7. 输出 Low / Medium / High 风险邮件
+        ```
+
+        ## v0.2 再加
+
+        ```text
+        1. gamma exposure by strike
+        2. call wall / put wall
+        3. IV rank / IV percentile
+        4. 12周历史均值对比
+        5. momentum watchlist breadth
+        ```
+
+        ## v0.3 再加
+
+        ```text
+        1. backtest
+        2. false positive / false negative 统计
+        3. 仓位暴露导入
+        4. 个性化 alert threshold
+        5. dashboard
+        ```
+
+        ---
+
+        # 9. 我的判断
+
+        这个 agent 对你是有价值的，但它的价值不是“预测崩盘”，而是：
+
+        > 在你趋势仓位很重的时候，提醒你本周是否进入了不适合继续追高的窗口。
+
+        尤其适合你的使用方式：
+
+        * 周一/周二：正常跟踪；
+        * 周三：判断是否提前减高 beta；
+        * 周四：确认风险是否升温；
+        * 周五：观察是否 pin、squeeze 或 vol crush；
+        * 下周一：复盘是否误报。
+
+        我建议你做。
+        但第一版必须克制：**只做风险分层，不做自动交易。**
+    ",
+}

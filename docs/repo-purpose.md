@@ -6,8 +6,8 @@ HongQuant is a personal quant research and signal-generation codebase for a sing
 It is being built to support a mid/low-frequency investment workflow across:
 
 - US equities and ETFs
-- Crypto spot markets
 - Macro data and SEC filings as supporting research inputs
+- Crypto spot markets
 
 The repo is not intended to be a generic quant platform, a broker-integrated execution system, or a product for external users.
 Its purpose is to give one investor a maintainable local codebase that can:
@@ -16,7 +16,6 @@ Its purpose is to give one investor a maintainable local codebase that can:
 2. Store that data in a lightweight local lakehouse layout.
 3. Run scheduled pipelines that refresh data and prepare downstream research inputs.
 4. Evolve into a decision-support system that produces signals, portfolio suggestions, and reports.
-
 
 ## Why It Exists
 
@@ -33,7 +32,6 @@ That leads to a practical architecture:
 - Prefect for simple scheduled workflows
 - provider adapters instead of building proprietary data plumbing
 - clear package boundaries for future strategy, portfolio, LLM, and reporting layers
-
 
 ## Current Scope in This Repo
 
@@ -52,7 +50,6 @@ The repository already provides:
 
 In other words, the repo currently functions as a data and orchestration foundation for later quantitative research.
 
-
 ## Intended End State
 
 Based on the code layout and the dev conversation, the repo is meant to grow into a four-layer personal quant stack:
@@ -65,7 +62,6 @@ Based on the code layout and the dev conversation, the repo is meant to grow int
 There is also an explicit plan to add an LLM-assisted research pipeline for earnings filings and valuation support.
 That LLM layer is intended to complement, not replace, the quantitative signal stack.
 
-
 ## What This Repo Is Not
 
 This repository is currently not:
@@ -77,7 +73,6 @@ This repository is currently not:
 - a complete backtesting or portfolio platform yet
 
 Several packages already exist for those future concerns, but most are scaffolding placeholders at this stage.
-
 
 ## Practical Summary
 

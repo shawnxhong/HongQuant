@@ -54,13 +54,6 @@ crypto_spot:
   - BTC/USDT
   - ETH/USDT
   - SOL/USDT
-  - BNB/USDT
-  - XRP/USDT
-  - DOGE/USDT
-  - AVAX/USDT
-  - LINK/USDT
-  - MATIC/USDT
-  - DOT/USDT
 
 fred_series:
   - DGS2          # 2Y Treasury
@@ -71,3 +64,25 @@ fred_series:
   - UNRATE        # Unemployment
   - VIXCLS        # VIX close
   - DCOILWTICO    # WTI crude
+
+# Options risk agent — underliers to scan for OpEx pressure
+options_underliers:
+  core_etfs: [SPY, QQQ, SMH, SOXX]
+  index:     [SPX, NDX]       # requires Polygon paid plan for index options
+  vol:       [VIX]            # fetched via FRED series VIXCLS; included for reference
+
+# Momentum stocks to track for breadth / fragility signals
+momentum_watchlist:
+  - NVDA
+  - AVGO
+  - AMD
+  - MSFT
+  - META
+  - AMZN
+  - GOOGL
+  - TSLA
+  - PLTR
+  - ARM
+  - ANET
+  - CRWD
+  - MSTR
