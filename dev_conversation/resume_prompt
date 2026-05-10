@@ -1,0 +1,5 @@
+Read dev_conversation/resume_context.md, src/option_watch/plan.md, and  
+  src/option_watch/README.md.                               
+  The OpEx Momentum Risk Agent is fully implemented in hongquant/options/ 
+  (52 tests passing, ruff clean).                                         
+  The immediate next task is [describe what you want to do].
