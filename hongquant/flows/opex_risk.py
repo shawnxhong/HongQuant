@@ -17,12 +17,12 @@ from typing import Literal
 import pandas as pd
 from prefect import flow, task
 
+from ..config import get_settings
 from ..email import send_email
 from ..logging import logger, setup_logging
 from ..notify import notify
 from ..options import metrics as m
 from ..options import store as opt_store
-from ..options.adapters.polygon_options import fetch_chain_snapshot
 from ..options.events import EventCalendar
 from ..options.expiries import front_friday, next_friday
 from ..options.momentum import breadth, momentum_fragility_score, relative_strength
@@ -36,8 +36,17 @@ from ..universe import load_universe
 # ---------------------------------------------------------------------------
 
 @task(retries=2, retry_delay_seconds=30)
-def fetch_chain(underlier: str) -> pd.DataFrame:
+def fetch_chain(underlier: str, *, provider: str) -> pd.DataFrame:
     setup_logging()
+    if provider == "polygon":
+        from ..options.adapters.polygon_options import fetch_chain_snapshot
+    elif provider == "yfinance":
+        from ..options.adapters.yfinance_options import fetch_chain_snapshot
+    elif provider == "ibkr":
+        from ..options.adapters.ibkr_options import fetch_chain_snapshot
+    else:
+        raise ValueError(f"Unsupported options data provider: {provider}")
+
     today = date.today()
     targets = [front_friday(today), next_friday(today)]
     df = fetch_chain_snapshot(underlier, expirations=targets)
@@ -188,17 +197,28 @@ def _run_scan(
     channels: list[str],
     dry_run: bool = False,
     mode: Literal["pulse", "weekly"] = "pulse",
+    provider: str | None = None,
+    underliers: list[str] | None = None,
 ) -> None:
     universe = load_universe("configs/universe.yaml")
-    core_tickers = universe.options_core_tickers  # SPY, QQQ, SMH, SOXX, SPX, NDX
     momentum_watchlist = universe.momentum_watchlist
     today = date.today()
+    provider = (provider or get_settings().options_data_provider).lower()
+    if underliers is not None:
+        core_tickers = underliers
+    elif provider == "yfinance":
+        # Yahoo is good enough for ETF-option dev runs, but unreliable for SPX/NDX index chains.
+        core_tickers = universe.options_underliers.get("core_etfs", universe.options_core_tickers)
+    else:
+        core_tickers = universe.options_core_tickers  # SPY, QQQ, SMH, SOXX, SPX, NDX
+    logger.info("OpEx options data provider: {}", provider)
+    logger.info("OpEx underliers: {}", ", ".join(core_tickers))
 
     # Fetch chains (sequential to respect Polygon rate limits; parallelise if on paid plan)
     chains: list[pd.DataFrame] = []
     for ticker in core_tickers:
         try:
-            chain = fetch_chain(ticker)
+            chain = fetch_chain(ticker, provider=provider)
             persist_snapshot(chain)
             chains.append(chain)
         except Exception as exc:
@@ -208,8 +228,14 @@ def _run_scan(
     bundles = [b for c in chains if (b := build_bundle(c)) is not None]
 
     if not bundles:
-        msg = f"OpEx Risk Agent: no bundles built for {today} — check Polygon API key / plan."
-        notify(msg)
+        msg = (
+            f"OpEx Risk Agent: no bundles built for {today} "
+            f"using {provider} — check data-source access, rate limits, and requested underliers."
+        )
+        if dry_run:
+            logger.warning("DRY RUN — {}", msg)
+        else:
+            notify(msg)
         return
 
     # Momentum + VIX signals
@@ -254,17 +280,39 @@ def _run_scan(
 
 
 @flow(name="opex_risk_pulse")
-def opex_risk_pulse(*, dry_run: bool = False) -> None:
+def opex_risk_pulse(
+    *,
+    dry_run: bool = False,
+    provider: str | None = None,
+    underliers: list[str] | None = None,
+) -> None:
     """Light daily scan (08:00, 11:30, 15:30 ET). Delivers to Telegram only."""
     setup_logging()
-    _run_scan(channels=["telegram"], dry_run=dry_run, mode="pulse")
+    _run_scan(
+        channels=["telegram"],
+        dry_run=dry_run,
+        mode="pulse",
+        provider=provider,
+        underliers=underliers,
+    )
 
 
 @flow(name="opex_risk_weekly")
-def opex_risk_weekly(*, dry_run: bool = False) -> None:
+def opex_risk_weekly(
+    *,
+    dry_run: bool = False,
+    provider: str | None = None,
+    underliers: list[str] | None = None,
+) -> None:
     """Full weekly report (Wed 15:30 ET, Fri 10:30 ET). Delivers to Email + Telegram."""
     setup_logging()
-    _run_scan(channels=["email", "telegram"], dry_run=dry_run, mode="weekly")
+    _run_scan(
+        channels=["email", "telegram"],
+        dry_run=dry_run,
+        mode="weekly",
+        provider=provider,
+        underliers=underliers,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -275,12 +323,28 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="OpEx Momentum Risk Agent")
     p.add_argument("--mode", choices=["pulse", "weekly"], default="weekly")
     p.add_argument("--dry-run", action="store_true", help="Print report instead of sending")
+    p.add_argument(
+        "--provider",
+        choices=["yfinance", "polygon", "ibkr"],
+        default=None,
+        help="Options data provider; defaults to OPTIONS_DATA_PROVIDER or yfinance",
+    )
+    p.add_argument(
+        "--underliers",
+        default=None,
+        help="Comma-separated underlier override for smoke tests, e.g. SPY or SPY,QQQ",
+    )
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = _parse_args()
+    underliers = (
+        [ticker.strip().upper() for ticker in args.underliers.split(",") if ticker.strip()]
+        if args.underliers
+        else None
+    )
     if args.mode == "pulse":
-        opex_risk_pulse(dry_run=args.dry_run)
+        opex_risk_pulse(dry_run=args.dry_run, provider=args.provider, underliers=underliers)
     else:
-        opex_risk_weekly(dry_run=args.dry_run)
+        opex_risk_weekly(dry_run=args.dry_run, provider=args.provider, underliers=underliers)

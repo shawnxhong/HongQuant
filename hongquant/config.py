@@ -7,9 +7,12 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_ENV_FILE),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=False,
@@ -26,6 +29,7 @@ class Settings(BaseSettings):
     ibkr_host: str = Field("127.0.0.1", alias="IBKR_HOST")
     ibkr_port: int = Field(7497, alias="IBKR_PORT")
     ibkr_client_id: int = Field(17, alias="IBKR_CLIENT_ID")
+    ibkr_market_data_type: int = Field(1, alias="IBKR_MARKET_DATA_TYPE")
 
     edgar_user_agent: str = Field(
         "HongQuant research anon@example.com", alias="EDGAR_USER_AGENT"
@@ -42,6 +46,7 @@ class Settings(BaseSettings):
     coinbase_api_secret: str | None = Field(None, alias="COINBASE_API_SECRET")
 
     polygon_api_key: str | None = Field(None, alias="POLYGON_API_KEY")
+    options_data_provider: str = Field("yfinance", alias="OPTIONS_DATA_PROVIDER")
     fmp_api_key: str | None = Field(None, alias="FMP_API_KEY")
     finnhub_api_key: str | None = Field(None, alias="FINNHUB_API_KEY")
     tiingo_api_key: str | None = Field(None, alias="TIINGO_API_KEY")

@@ -54,24 +54,46 @@ src/option_watch/
 
 ### What still needs to happen before production
 
-**Step 1 -- Add credentials to `.env`** (see `.env.example`):
+**Step 1 -- Pick a data provider and add credentials to `.env`** (see `.env.example`):
+
+Three providers are supported via `OPTIONS_DATA_PROVIDER`:
+- `ibkr` (recommended) -- live IV/Greeks/OI via IB Gateway, ~$1.50/mo OPRA subscription
+- `polygon` -- paid HTTP API, ~$30+/mo
+- `yfinance` -- free dev fallback (slow, no Greeks)
+
 ```
-POLYGON_API_KEY=...       # required for all options data
+# IBKR (recommended) -- requires `uv sync --extra ibkr` + IB Gateway running + OPRA
+OPTIONS_DATA_PROVIDER=ibkr
+IBKR_HOST=127.0.0.1
+IBKR_PORT=4001                   # gateway live; 4002 gateway paper, 7497 TWS paper
+IBKR_CLIENT_ID=17
+IBKR_MARKET_DATA_TYPE=1          # 1 live, 3 delayed (free)
+
+# OR Polygon
+POLYGON_API_KEY=...
+
+# Email (required for weekly report)
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=...
-SMTP_PASSWORD=...         # Gmail: use an app password
+SMTP_PASSWORD=...                # Gmail: use an app password
 SMTP_FROM=...
-SMTP_TO=...               # comma-separated recipients
+SMTP_TO=...                      # comma-separated recipients
 ```
 
 **Step 2 -- Smoke test** (no emails sent):
 ```bash
+# IBKR: requires IB Gateway running and logged in
+uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run --provider ibkr --underliers SPY
+
+# Or full weekly dry-run with whatever provider is set in .env:
 uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run
 ```
 
-**Step 3 -- Verify Polygon plan covers index options** (SPX/NDX require a higher Polygon tier).
-Core ETFs (SPY, QQQ, SMH, SOXX) work on most paid plans.
+**Step 3 -- Provider notes**:
+- IBKR: log into IB Gateway with the **live** account (market-data subscriptions are per live username); the adapter sets `readonly=True` on the connection so no orders can leak. SPX/NDX need the CBOE One add-on.
+- Polygon: SPX/NDX require a higher tier; SPY/QQQ/SMH/SOXX work on most paid plans.
+- yfinance: Greeks are estimated locally via Black-Scholes; OI for index ETFs is patchy. Use for dev only.
 
 **Step 4 -- Register Prefect schedules** (Prefect server runs via `docker-compose up`):
 ```bash

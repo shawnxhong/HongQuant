@@ -5,7 +5,7 @@ A scheduled market-risk monitoring agent that scans SPY / QQQ / SPX / NDX / SMH 
 ## What it does
 
 Every Wednesday at 15:30 ET, the agent:
-1. Fetches the full options chain for each core underlier (via Polygon.io)
+1. Fetches the full options chain for each core underlier (via IBKR, Polygon.io, or yfinance)
 2. Computes front-week vs next-week ATM IV premium
 3. Scans OI concentration, gamma walls (call wall / put wall), and volume/OI ratio
 4. Measures QQQ/SPY and SMH/QQQ relative strength + watchlist breadth
@@ -22,7 +22,9 @@ All logic is in the main `hongquant` package:
 ```
 hongquant/
 ├── options/
+│   ├── adapters/yfinance_options.py  # Free dev adapter; estimates Greeks locally
 │   ├── adapters/polygon_options.py   # Polygon.io chain snapshot fetcher
+│   ├── adapters/ibkr_options.py      # Interactive Brokers adapter (recommended)
 │   ├── expiries.py                   # Front-Friday, monthly OpEx, triple witching helpers
 │   ├── events.py                     # FOMC / CPI / NFP / earnings calendar
 │   ├── metrics.py                    # ATM IV, OI, gamma exposure, max pain, etc.
@@ -41,10 +43,27 @@ configs/
 
 ## Setup
 
-### 1. Add credentials to `.env`
+### 1. Pick a data provider
+
+| Provider | Cost | Quality | Speed | Best for |
+| --- | --- | --- | --- | --- |
+| **ibkr** | ~$1.50/mo OPRA add-on | Live IV / Greeks / OI | Fast (single TCP, batched snapshots) | **Production** -- requires IBKR account + IB Gateway |
+| **polygon** | ~$30+/mo for full options tier | Live IV / Greeks / OI | Fast (HTTP) | Production if you don't have IBKR |
+| **yfinance** | Free | No Greeks (estimated locally), OI patchy | Slow (one HTTP per expiry) | Dev / weekend smoke tests |
+
+### 2. Add credentials to `.env`
 
 ```bash
-# Polygon.io — options chain data
+# Options chain data -- pick one
+OPTIONS_DATA_PROVIDER=ibkr              # ibkr | polygon | yfinance
+
+# --- For IBKR (recommended) ---
+IBKR_HOST=127.0.0.1
+IBKR_PORT=4001                          # 4001 gateway live, 4002 gateway paper, 7497 TWS paper
+IBKR_CLIENT_ID=17
+IBKR_MARKET_DATA_TYPE=1                 # 1 live, 3 delayed (free)
+
+# --- For Polygon ---
 POLYGON_API_KEY=your_key_here
 
 # Email delivery (Gmail app-password works)
@@ -60,19 +79,48 @@ TELEGRAM_BOT_TOKEN=...
 TELEGRAM_CHAT_ID=...
 ```
 
-### 2. Install dependencies
+### 3. Install dependencies
 
 ```bash
-uv sync
+uv sync                # base install
+uv sync --extra ibkr   # add this if using IBKR (pulls ib_async)
 ```
 
-### 3. Smoke test (no emails sent)
+### 4. IBKR-specific setup (skip if using polygon or yfinance)
+
+1. **Subscribe to OPRA** in IBKR Account Management -> User Settings -> Market Data Subscriptions:
+   - *US Securities Snapshot and Futures Value Bundle* (free if commissions >= $30/mo, else $10/mo)
+   - *US Equity and Options Add-On Streaming Bundle* (~$1.50/mo non-pro) -- this covers OPRA
+   - For SPX/NDX index options: add *CBOE One US Add-On*
+2. **Run IB Gateway** (recommended over TWS for scheduled runs):
+   - File -> Global Configuration -> API -> Settings
+     - Enable ActiveX and Socket Clients: yes
+     - Socket port: 4001 (live) or 4002 (paper)
+     - Read-Only API: yes
+     - Trusted IPs: add `127.0.0.1`
+   - Log in with **live** credentials (market data subscriptions are bound to the live username).
+3. Leave IB Gateway running before each scheduled flow execution.
+
+### 5. Smoke test (no emails sent)
 
 ```bash
 uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run
 ```
 
-### 4. Seed historical baseline (optional, improves OI comparison signal)
+To force a provider for one run:
+
+```bash
+uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run --provider ibkr
+uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run --provider yfinance
+```
+
+To smoke test only one underlier:
+
+```bash
+uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run --provider ibkr --underliers SPY
+```
+
+### 6. Seed historical baseline (optional, improves OI comparison signal)
 
 After a few weeks of daily runs, the 12-week OI baseline auto-populates. For a faster start, run the pulse mode daily for a few weeks:
 

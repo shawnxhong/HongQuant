@@ -92,15 +92,20 @@ def register_views(con: duckdb.DuckDBPyConnection, *, root: Path | None = None) 
     """(Re)create the `ohlcv` view over the Parquet lake.
 
     Uses Hive-style partitioning so `market/asset_type/interval/year` become columns.
+    On cold-start (empty lake) DuckDB raises IOException; we skip view creation so
+    callers get an empty result rather than a crash.
     """
     root = root or get_settings().parquet_root
     glob = str(root / "ohlcv" / "**" / "*.parquet")
-    con.execute(
-        f"""
-        CREATE OR REPLACE VIEW ohlcv AS
-        SELECT * FROM read_parquet('{glob}', hive_partitioning=TRUE)
-        """
-    )
+    try:
+        con.execute(
+            f"""
+            CREATE OR REPLACE VIEW ohlcv AS
+            SELECT * FROM read_parquet('{glob}', hive_partitioning=TRUE)
+            """
+        )
+    except duckdb.IOException:
+        pass  # no parquet files yet; queries against `ohlcv` will raise CatalogException
 
 
 def query_ohlcv(
@@ -141,7 +146,10 @@ def query_ohlcv(
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY symbol, ts"
-    return con.execute(sql, params).df()
+    try:
+        return con.execute(sql, params).df()
+    except duckdb.CatalogException:
+        return pd.DataFrame()
 
 
 def latest_timestamp(
@@ -155,10 +163,13 @@ def latest_timestamp(
     """Return the last stored ts for (symbol, interval, market), or None."""
     con = _connect(db_path)
     register_views(con, root=root)
-    res = con.execute(
-        "SELECT MAX(ts) FROM ohlcv WHERE symbol = ? AND interval = ? AND market = ?",
-        [symbol, interval, market],
-    ).fetchone()
+    try:
+        res = con.execute(
+            "SELECT MAX(ts) FROM ohlcv WHERE symbol = ? AND interval = ? AND market = ?",
+            [symbol, interval, market],
+        ).fetchone()
+    except duckdb.CatalogException:
+        return None
     if not res or res[0] is None:
         return None
     ts = pd.Timestamp(res[0])

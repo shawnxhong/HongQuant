@@ -213,3 +213,4 @@ __marimo__/
 *.duckdb.wal
 .prefect/
 .lancedb/
+data_source_api.json

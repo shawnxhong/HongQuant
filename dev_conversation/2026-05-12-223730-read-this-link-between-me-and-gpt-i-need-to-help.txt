@@ -1,0 +1,880 @@
+╭─── Claude Code v2.1.139 ─────────────────────────────────────────────────────╮
+│                                                    │ Tips for getting        │
+│               Welcome back ShawnHong!              │ started                 │
+│                                                    │ Run /init to create a … │
+│                       ▐▛███▜▌                      │ ─────────────────────── │
+│                      ▝▜█████▛▘                     │ What's new              │
+│                        ▘▘ ▝▝                       │ Added agent view (Rese… │
+│ Sonnet 4.6 · Claude Pro · shawn.hong@outlook.com's │ Added `/goal` command:… │
+│  Organization                                      │ Added `/scroll-speed` … │
+│                    ~/HongQuant                     │ /release-notes for more │
+╰──────────────────────────────────────────────────────────────────────────────╯
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+  ⎿  Read ../../hongquant/flows/opex_risk.py (349 lines)
+  ⎿  Read ../../.env.example (68 lines)
+  ⎿  Read ../../hongquant/config.py (86 lines)
+  ⎿  Read ../../dev_conversation/resume_context.md (126 lines)
+  ⎿  Read ../../../.claude/projects/-home-hong-HongQuant/memory/project_opex_agent.md (23 lines)
+  ⎿  Plan file referenced (~/.claude/plans/curious-mapping-donut.md)
+
+❯ /usage 
+  ⎿  Settings dialog dismissed
+
+❯ /model                                                                        
+  ⎿  Set model to Opus 4.7
+
+❯ /plan thanks. I don't want to spend the budget on polygon option data source  
+at current dev stage. the yfinance is free but too slow. I have $430000 in IBKR 
+ so I am thinking using IBKR as the option data source. please tell me what I   
+need to do, and also plan the glue code needed.                                 
+  ⎿  Enabled plan mode
+
+● I'll look at the existing adapters and config to understand the contract the
+  IBKR adapter needs to match, then put together a plan.
+
+  Read 2 files (ctrl+o to expand)
+
+● Let me explore what IBKR-related infrastructure already exists in the repo,
+  and load the schemas I'll need.
+
+● Explore(Map IBKR usage in repo)
+  ⎿  Done (20 tool uses · 31.4k tokens · 1m 17s)
+  (ctrl+o to expand)
+
+● Let me read the existing plan file and check a couple more details before
+  designing the IBKR adapter approach.
+
+  Read 2 files (ctrl+o to expand)
+
+● I have enough context now. Let me ask a couple of clarifying questions before
+  designing the IBKR setup steps.
+
+● User answered Claude's questions:
+  ⎿  · What's your current IBKR market data subscription status for US options? 
+     → Will subscribe before running
+     · Which IBKR endpoint will the agent connect to? → which is best? I have 
+     both IB gateway and TWS desktop installed
+     · Should I keep the yfinance and Polygon adapters? → Keep all three 
+     (Recommended)
+
+● I'll write the final plan. (Skipping TaskCreate since plan mode restricts me
+  to read-only + plan-file edits.)
+
+● Updated plan
+  ⎿  Error writing file
+
+  Read 1 file (ctrl+o to expand)
+
+● Updated plan
+  ⎿  /plan to preview
+
+● User approved Claude's plan
+  ⎿  Plan saved to: ~/.claude/plans/curious-mapping-donut.md · /plan to edit
+     IBKR Options Adapter — Implementation Plan
+
+     Context
+
+     The OpEx Risk Agent currently supports two options data providers
+     (hongquant/flows/opex_risk.py:41-46):
+
+     - yfinance — free but slow (one HTTP round-trip per expiry, no Greeks, OI
+     often missing for index ETFs); used today for dev.
+     - Polygon.io — fast and complete but ~$30+/month for the tier that returns
+     IV/Greeks/OI.
+
+     The user holds ~$430k in IBKR and is already paying broker commissions;
+     adding OPRA (~$1.50/month non-pro) gives live, batched options snapshots
+     over a single TCP connection — strictly faster than yfinance and free
+     relative to Polygon. This plan adds an IBKR adapter alongside the existing
+     two (no removal), and documents the one-time TWS/Gateway + market-data
+     setup needed before the agent can talk to IBKR.
+
+     Resolved decisions:
+     - User will subscribe to OPRA before first run; adapter targets live data
+     with reqMarketDataType(1) and falls back to delayed (3) when
+     env-configured.
+     - Recommendation: IB Gateway, live, port 4001 — see "TWS vs IB Gateway"
+     below. Code default kept at IBKR_PORT=7497 (paper TWS) so existing
+     tests/dev still work; production switches via .env.
+     - Keep yfinance and Polygon adapters intact; IBKR becomes a third
+     selectable provider.
+
+     TWS vs IB Gateway — recommendation
+
+     Use IB Gateway, live (port 4001), with a dedicated IBKR_CLIENT_ID.
+
+     ┌───────────────────┬────────────────────────────┬───────────────────────┐
+     │      Concern      │         IB Gateway         │      TWS Desktop      │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Memory / CPU      │ ~150 MB, no GUI rendering  │ ~700 MB+, full Java   │
+     │                   │                            │ GUI                   │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Crash surface     │ Tiny — just the API bridge │ Larger (charts, news, │
+     │                   │                            │  scanners, dialogs)   │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Auto-restart      │ Yes — designed for         │ Awkward; chart        │
+     │ friendly          │ headless use               │ windows etc. need     │
+     │                   │                            │ attention             │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Risk of           │ None (no UI to close)      │ Easy to close TWS by  │
+     │ accidental closes │                            │ accident              │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Market data       │ Same as TWS (per-username) │ Same                  │
+     │ subscriptions     │                            │                       │
+     ├───────────────────┼────────────────────────────┼───────────────────────┤
+     │ Daily re-login    │ Both require it unless you │ Same                  │
+     │                   │  use IBC/ibc-gateway       │                       │
+     └───────────────────┴────────────────────────────┴───────────────────────┘
+
+     Why live over paper: Market data subscriptions are tied to the live
+     username on IBKR; paper sessions only inherit subs if you've explicitly
+     enabled "Share market data" in Account Management. Using the live login is
+     one fewer configuration step. The adapter is read-only — it never places
+     orders — so connecting to the live socket carries no execution risk. Still,
+      set readOnlyApi=true in Gateway's API config as a belt-and-suspenders
+     measure.
+
+     For weekend dev / smoke tests when Gateway isn't running, fall back to
+     --provider yfinance.
+
+     ---
+     User-side setup steps (one-time)
+
+     1. Install the optional dep (already declared in pyproject.toml:35):
+     uv sync --extra ibkr
+     2. Subscribe to OPRA in IBKR Account Management → User Settings → Market
+     Data Subscriptions:
+       - "US Securities Snapshot and Futures Value Bundle" (free if commissions
+     ≥ $30/mo, else $10/mo) — covers SPY/QQQ stock quotes
+       - "US Equity and Options Add-On Streaming Bundle" or "OPRA (US Options
+     Exchanges)" — ~$1.50/month non-pro
+       - For SPX/NDX index options: add "CBOE One US Add-On"
+     3. Configure IB Gateway (download from interactivebrokers.com if not
+     already installed):
+       - File → Global Configuration → API → Settings
+           - Enable ActiveX and Socket Clients: ✅
+         - Socket port: 4001 (live) or 4002 (paper)
+         - Master API client ID: leave blank
+         - Read-Only API: ✅
+         - Trusted IPs: add 127.0.0.1
+       - Save, restart Gateway, log in with live credentials
+     4. Set .env:
+     OPTIONS_DATA_PROVIDER=ibkr
+     IBKR_HOST=127.0.0.1
+     IBKR_PORT=4001
+     IBKR_CLIENT_ID=17
+     IBKR_MARKET_DATA_TYPE=1        # 1=live, 2=frozen, 3=delayed,
+     4=delayed-frozen
+     5. Smoke test (Gateway must be running and logged in):
+     uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run
+     --provider ibkr --underliers SPY
+
+     ---
+     Code plan
+
+     New file: hongquant/options/adapters/ibkr_options.py
+
+     Mirrors polygon_options.py contract exactly — same function signature, same
+      CHAIN_COLUMNS output (imported from polygon_options to avoid duplication,
+     as yfinance_options.py already does on line 15).
+
+     Function signature (matches existing adapters):
+     def fetch_chain_snapshot(
+         underlier: str,
+         *,
+         expirations: list[date] | None = None,
+     ) -> pd.DataFrame
+
+     Implementation outline:
+     1. setup_logging(); read get_settings() for
+     host/port/client_id/market_data_type
+     2. Lazy import ib_async (raise RuntimeError with install hint if missing)
+     3. Open one IB() connection per call (sync wrapper; ib_async exposes
+     util.run/connect)
+     4. ib.reqMarketDataType(settings.ibkr_market_data_type)
+     5. Qualify underlier contract:
+          - "SPX"/"NDX"/"VIX"  -> Index(symbol, exchange="CBOE", currency="USD")
+            (NDX uses "NASDAQ"; map per UNDERLIER_EXCHANGE below)
+          - others             -> Stock(symbol, "SMART", "USD")
+        ib.qualifyContracts(under_contract)
+     6. Snapshot spot: ib.reqTickers(under_contract) -> ticker.last or
+     marketPrice()
+     7. ib.reqSecDefOptParams(symbol, "", secType, conId)
+          -> returns expirations (YYYYMMDD strings) and strikes (floats) per
+     exchange
+        Pick row matching primary exchange (CBOE for index, SMART/CBOE for
+     ETFs).
+     8. Filter to target expirations:
+          - If `expirations` provided: intersect with available
+          - Else: front_friday(today), next_friday(today)
+        Filter strikes to a sensible band around spot (e.g. ±15%) to keep
+     request count down.
+     9. Build Option contracts:
+          [Option(symbol, exp_str, strike, right, exchange, "100", "USD")
+           for exp, strike, right in product(target_exps, strikes_band,
+     ["C","P"])]
+     10. ib.qualifyContracts(*opts) — drops any non-tradable strikes
+     11. Pace: chunk into batches of <= 50, call ib.reqTickers(*batch) per chunk
+         (reqTickers returns when all snapshots arrive or after 11s timeout
+     each).
+         Greeks come via ticker.modelGreeks / ticker.bidGreeks /
+     ticker.askGreeks;
+         OI via ticker.callOpenInterest / ticker.putOpenInterest on the
+     underlying *or*
+         per-contract via ticker.callOpenInterest (depends on tick type
+     100/101).
+     12. Normalize each ticker into the CHAIN_COLUMNS row dict, identical to
+     polygon adapter.
+     13. ib.disconnect() (in finally block to avoid socket leaks)
+     14. Return DataFrame[CHAIN_COLUMNS], sorted by (expiration, strike,
+     option_type).
+
+     Constants:
+     UNDERLIER_EXCHANGE: dict[str, tuple[str, str]] = {
+         # symbol -> (secType, exchange)
+         "SPX": ("IND", "CBOE"),
+         "NDX": ("IND", "NASDAQ"),
+         "VIX": ("IND", "CBOE"),
+     }
+     _DEFAULT_STRIKE_BAND_PCT = 0.15   # ±15% around spot
+     _CHUNK_SIZE = 50                  # IBKR pacing limit
+     _REQ_TIMEOUT = 15.0               # seconds per ticker batch
+
+     Error handling / fallbacks:
+     - Connection refused → RuntimeError("IB Gateway not reachable at 
+     {host}:{port} — is it running and logged in?")
+     - No market data subscription → IBKR returns NaN IV/Greeks; log a warning
+     once per underlier, do not raise — downstream metrics handle NaN via
+     iv_rank=None / oi_vs_baseline=None.
+     - Empty chain → return empty DataFrame with CHAIN_COLUMNS (matches yfinance
+      adapter behavior on line 170-201).
+
+     Also export:
+     def fetch_previous_day_oi(underlier: str) -> pd.DataFrame:
+         return fetch_chain_snapshot(underlier)
+     to maintain parity with polygon_options.py:141-143 and
+     yfinance_options.py:227-229.
+
+     Edit: hongquant/flows/opex_risk.py:41-46
+
+     Add a third branch to the provider switch:
+     elif provider == "ibkr":
+         from ..options.adapters.ibkr_options import fetch_chain_snapshot
+     And extend _run_scan (line 207-211) so the provider == "ibkr" case uses
+     universe.options_core_tickers (same as Polygon — IBKR can do SPX/NDX with
+     CBOE One add-on).
+
+     Edit: hongquant/config.py
+
+     Add one field after ibkr_client_id (line 28):
+     ibkr_market_data_type: int = Field(1, alias="IBKR_MARKET_DATA_TYPE")
+     # 1=live, 2=frozen, 3=delayed, 4=delayed-frozen
+
+     Edit: .env.example
+
+     Two small additions:
+     - Update line 17 comment to mention 4001/4002 are typical for production
+     (Gateway).
+     - Below IBKR_CLIENT_ID=17 add:
+     IBKR_MARKET_DATA_TYPE=1               # 1 live, 2 frozen, 3 delayed, 4
+     delayed-frozen
+     - Update line 38 comment from yfinance | polygon to yfinance | polygon | 
+     ibkr.
+
+     Edit: hongquant/flows/opex_risk.py:326
+
+     Add "ibkr" to the argparse --provider choices list.
+
+     New file: tests/test_ibkr_options_adapter.py
+
+     Mock ib_async.IB via monkeypatch.setitem(sys.modules, "ib_async", 
+     fake_module) — same pattern as
+     tests/test_yfinance_options_adapter.py:55-69. Cover:
+
+     1. test_ibkr_adapter_normalizes_chain — Fake IB returns 2 strikes × 2
+     expirations × 2 rights = 8 tickers with synthetic IV/Greeks/OI; assert
+     columns == CHAIN_COLUMNS, rows == 8, spot populated, option_type ∈ {call,
+     put}.
+     2. test_ibkr_adapter_empty_when_no_chain — reqSecDefOptParams returns empty
+      list; expect empty DataFrame with correct columns.
+     3. test_ibkr_adapter_filters_to_requested_expirations — request only the
+     front Friday; verify only contracts with that expiration are returned.
+     4. test_ibkr_adapter_raises_when_module_missing — pop ib_async from
+     sys.modules and patch import to fail; expect RuntimeError with install
+     hint.
+
+     Update: src/option_watch/README.md
+
+     Add an "IBKR data source" subsection mirroring the existing setup table —
+     listing the 5 user steps above and noting --provider ibkr is now the
+     recommended production default.
+
+     Update: dev_conversation/resume_context.md
+
+     Replace the "Polygon" credential block in Step 1 with a three-provider
+     table and update Step 2's smoke-test example to use --provider ibkr.
+
+     ---
+     Critical files (paths summary)
+
+     ┌────────┬────────────────────────────────────────────┬────────────────────
+     ┐
+     │ Action │                    Path                    │       Anchor
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ New    │ hongquant/options/adapters/ibkr_options.py │ —
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │        │                                            │ fetch_chain:41-46,
+     │
+     │ Edit   │ hongquant/flows/opex_risk.py               │
+     │
+     │        │                                            │ _run_scan:207-211,
+     │
+     │        │                                            │  _parse_args:326
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ Edit   │ hongquant/config.py                        │ after
+     │
+     │        │                                            │ ibkr_client_id:28
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ Edit   │ .env.example                               │ line 17, after
+     │
+     │        │                                            │ line 18, line 38
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ New    │ tests/test_ibkr_options_adapter.py         │ —
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ Edit   │ src/option_watch/README.md                 │ add subsection
+     │
+     ├────────┼────────────────────────────────────────────┼────────────────────
+     ┤
+     │ Edit   │ dev_conversation/resume_context.md         │ Steps 1 + 2
+     │
+     └────────┴────────────────────────────────────────────┴────────────────────
+     ┘
+
+     Reused utilities (no new infra)
+
+     ┌─────────┬──────────────┬────────────────────────────────────────────────┐
+     │ Concern │    Reuse     │                     Where                      │
+     ├─────────┼──────────────┼────────────────────────────────────────────────┤
+     │ Chain   │              │                                                │
+     │ column  │ CHAIN_COLUMN │ hongquant/options/adapters/polygon_options.py: │
+     │ contrac │ S            │ 23-40                                          │
+     │ t       │              │                                                │
+     ├─────────┼──────────────┼────────────────────────────────────────────────┤
+     │ Setting │ get_settings │ hongquant/config.py:84                         │
+     │ s       │ ()           │                                                │
+     ├─────────┼──────────────┼────────────────────────────────────────────────┤
+     │ Logging │ setup_loggin │ hongquant/logging.py                           │
+     │         │ g, logger    │                                                │
+     ├─────────┼──────────────┼────────────────────────────────────────────────┤
+     │         │ tenacity for │                                                │
+     │ Retry   │  connection  │ already in pyproject.toml:21                   │
+     │         │ retry        │                                                │
+     ├─────────┼──────────────┼────────────────────────────────────────────────┤
+     │ Provide │ fetch_chain  │                                                │
+     │ r       │ task         │ hongquant/flows/opex_risk.py:39-52             │
+     │ switch  │              │                                                │
+     └─────────┴──────────────┴────────────────────────────────────────────────┘
+
+     Verification
+
+     1. Lint clean: uv run ruff check .
+     2. Unit tests pass (no IB Gateway needed — fully mocked): uv run pytest 
+     tests/test_ibkr_options_adapter.py -v
+     3. Full suite green: uv run pytest -q (52 existing + 4 new = 56)
+     4. Live adapter smoke test (IB Gateway running, logged in, OPRA
+     subscribed):
+     uv run python -c "
+     from hongquant.options.adapters.ibkr_options import fetch_chain_snapshot
+     df = fetch_chain_snapshot('SPY')
+     print(df[['expiration','strike','option_type','bid','ask','implied_volatili
+     ty','open_interest']].head(20))
+     print(f'{len(df)} contracts, spot={df[\"spot\"].iloc[0]}')
+     "
+     5. End-to-end dry-run with IBKR provider:
+     uv run python -m hongquant.flows.opex_risk --mode weekly --dry-run
+     --provider ibkr --underliers SPY,QQQ
+     5. Expect: rendered email body printed to stdout, snapshot Parquet written
+     under data/parquet/options/, no email/Telegram sent.
+     6. Confirm config switch works: set OPTIONS_DATA_PROVIDER=ibkr in .env,
+     drop --provider flag, rerun step 5 — same result.
+
+     Out of scope
+
+     - Real-time streaming (reqMktData) — snapshots via reqTickers are
+     sufficient for the 3×/day pulse.
+     - Order placement / portfolio integration — adapter is strictly read-only.
+     - IBC / auto-login for IB Gateway — manual login each morning is fine for
+     now.
+     - Polygon adapter removal — kept as documented fallback.
+● Plan approved. Let me track progress and start implementing.
+
+● Now the adapter. I'll write it to mirror the polygon adapter's contract and
+  use ib_async's synchronous wrappers.
+
+● Write(hongquant/options/adapters/ibkr_options.py)
+  ⎿  Wrote 325 lines to hongquant/options/adapters/ibkr_options.py
+       2 """Interactive Brokers options chain snapshot adapter.
+       3 Requires IB Gateway (recommended) or TWS to be running locally w
+       4 enabled and an OPRA market-data subscription on the account. Ins
+         tall the
+       5 optional dependency with ``uv sync --extra ibkr``.
+       7 The adapter opens one TCP connection per call, requests a chain 
+         snapshot via
+          strictlyefOptParams`` + ``reqTickers``, then disconnects. It is
+       9 read-only -- no orders are placed.
+      10 """
+     … +349 lines (ctrl+o to expand)
+
+● Now wire IBKR into the flow, config, and .env.example.
+
+● Update(hongquant/flows/opex_risk.py)
+  ⎿  Added 2 lines
+      42          from ..options.adapters.polygon_options import fetch_ch
+          ain_snapshot
+      43      elif provider == "yfinance":
+      44          from ..options.adapters.yfinance_options import fetch_c
+          hain_snapshot
+      45 +    elif provider == "ibkr":                                   
+      46 +        from ..options.adapters.ibkr_options import fetch_chain
+         +_snapshot                                                      
+      47      else:
+      48          raise ValueError(f"Unsupported options data provider: {
+          provider}")
+      49  
+
+● Update(hongquant/flows/opex_risk.py)
+  ⎿  Added 1 line, removed 1 line
+      325      p.add_argument("--dry-run", action="store_true", help="Pri
+           nt report instead of sending")
+      326      p.add_argument(
+      327          "--provider",
+      328 -        choices=["yfinance", "polygon"],                      
+      328 +        choices=["yfinance", "polygon", "ibkr"],              
+      329          default=None,
+      330          help="Options data provider; defaults to OPTIONS_DATA_
+           PROVIDER or yfinance",
+      331      )
+
+● The _run_scan provider branch is fine — ibkr falls through to else which uses
+  the full options_core_tickers (SPY/QQQ/SMH/SOXX/SPX/NDX), which is the desired
+   behavior. Now config + env.
+
+● Update(hongquant/config.py)
+  ⎿  Added 1 line
+      26      ibkr_host: str = Field("127.0.0.1", alias="IBKR_HOST")
+      27      ibkr_port: int = Field(7497, alias="IBKR_PORT")
+      28      ibkr_client_id: int = Field(17, alias="IBKR_CLIENT_ID")
+      29 +    ibkr_market_data_type: int = Field(1, alias="IBKR_MARKET_DA
+         +TA_TYPE")                                                      
+      30  
+      31      edgar_user_agent: str = Field(
+      32          "HongQuant research anon@example.com", alias="EDGAR_USE
+          R_AGENT"
+
+● Update(.env.example)
+  ⎿  Added 4 lines, removed 1 line
+      12  ALPACA_PAPER=true                     # true -> paper; false ->
+           live
+      13  
+      14  # ---- Interactive Brokers (options chain + live) ----
+      15 -# Requires TWS or IB Gateway running locally or on VPS         
+      15 +# Requires TWS or IB Gateway running locally or on VPS.        
+      16 +# Install the extra: `uv sync --extra ibkr` (pulls ib_async).  
+      17 +# For OpEx agent production use, IB Gateway live (4001) is reco
+         +mmended.                                                       
+      18  IBKR_HOST=127.0.0.1
+      19  IBKR_PORT=7497                        # 7497 paper TWS, 7496 li
+          ve TWS, 4002 gateway paper, 4001 gateway live
+      20  IBKR_CLIENT_ID=17
+      21 +IBKR_MARKET_DATA_TYPE=1               # 1 live, 2 frozen, 3 del
+         +ayed, 4 delayed-frozen                                         
+      22  
+      23  # ---- SEC EDGAR ----
+      24  # EDGAR requires a User-Agent with contact info per their fair-
+          access policy
+
+● Update(.env.example)
+  ⎿  Added 1 line, removed 1 line
+      38  COINBASE_API_SECRET=
+      39  
+      40  # ---- Optional paid data ----
+      41 -OPTIONS_DATA_PROVIDER=yfinance          # yfinance | polygon   
+      41 +OPTIONS_DATA_PROVIDER=yfinance          # yfinance | polygon | 
+         +ibkr                                                           
+      42  POLYGON_API_KEY=
+      43  FMP_API_KEY=
+      44  FINNHUB_API_KEY=
+● Now the tests with a mocked ib_async module.
+
+● Write(tests/test_ibkr_options_adapter.py)
+  ⎿  Wrote 222 lines to tests/test_ibkr_options_adapter.py
+       2 from __future__ import annotations
+       3 import sys
+       4 import types
+       5 from datetime import date
+       6 
+       7 import pandas as pd
+       8 import pytest
+       9 
+      10 from hongquant.options.adapters.polygon_options import CHAIN_COL
+         UMNS
+     … +236 lines (ctrl+o to expand)
+
+● Bash(cd /home/hong/HongQuant && uv run pytest
+      tests/test_ibkr_options_adapter.py -v 2>&1 | tail -60)
+  ⎿  ============================= test session starts ====================
+     ==========
+     platform linux -- Python 3.12.8, pytest-9.0.3, pluggy-1.6.0 -- /home/h
+     … +18 lines (ctrl+o to expand)
+
+● All 6 tests pass. Now update docs.
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(src/option_watch/README.md)
+  ⎿  Added 1 line, removed 1 line
+       5  ## What it does
+       6  
+       7  Every Wednesday at 15:30 ET, the agent:
+       8 -1. Fetches the full options chain for each core underlier (via 
+         -Polygon.io)                                                    
+       8 +1. Fetches the full options chain for each core underlier (via 
+         +IBKR, Polygon.io, or yfinance)                                 
+       9  2. Computes front-week vs next-week ATM IV premium
+      10  3. Scans OI concentration, gamma walls (call wall / put wall), 
+          and volume/OI ratio
+      11  4. Measures QQQ/SPY and SMH/QQQ relative strength + watchlist b
+          readth
+
+● Update(src/option_watch/README.md)
+  ⎿  Added 1 line
+      24  ├── options/
+      25  │   ├── adapters/yfinance_options.py  # Free dev adapter; estim
+          ates Greeks locally
+      26  │   ├── adapters/polygon_options.py   # Polygon.io chain snapsh
+          ot fetcher
+      27 +│   ├── adapters/ibkr_options.py      # Interactive Brokers ada
+         +pter (recommended)                                             
+      28  │   ├── expiries.py                   # Front-Friday, monthly O
+          pEx, triple witching helpers
+      29  │   ├── events.py                     # FOMC / CPI / NFP / earn
+          ings calendar
+      30  │   ├── metrics.py                    # ATM IV, OI, gamma expos
+          ure, max pain, etc.
+
+● Update(src/option_watch/README.md)
+  ⎿  Added 43 lines, removed 10 lines
+      43  
+      44  ## Setup
+      45  
+      46 -### 1. Add credentials to `.env`                               
+      46 +### 1. Pick a data provider                                    
+      47  
+      48 +| Provider | Cost | Quality | Speed | Best for |               
+      49 +| --- | --- | --- | --- | --- |                                
+      50 +| **ibkr** | ~$1.50/mo OPRA add-on | Live IV / Greeks / OI | Fa
+         +st (single TCP, batched snapshots) | **Production** -- requires
+         + IBKR account + IB Gateway |                                   
+      51 +| **polygon** | ~$30+/mo for full options tier | Live IV / Gree
+         +ks / OI | Fast (HTTP) | Production if you don't have IBKR |    
+      52 +| **yfinance** | Free | No Greeks (estimated locally), OI patch
+         +y | Slow (one HTTP per expiry) | Dev / weekend smoke tests |   
+      53 +                                                               
+      54 +### 2. Add credentials to `.env`                               
+      55 +                                                               
+      56  ```bash
+      49 -# Options chain data                                           
+      50 -OPTIONS_DATA_PROVIDER=yfinance          # free dev mode; use po
+         -lygon for production                                           
+      51 -POLYGON_API_KEY=your_key_here           # only needed when OPTI
+         -ONS_DATA_PROVIDER=polygon                                      
+      57 +# Options chain data -- pick one                               
+      58 +OPTIONS_DATA_PROVIDER=ibkr              # ibkr | polygon | yfin
+         +ance                                                           
+      59  
+      60 +# --- For IBKR (recommended) ---                               
+      61 +IBKR_HOST=127.0.0.1                                            
+      62 +IBKR_PORT=4001                          # 4001 gateway live, 40
+         +02 gateway paper, 7497 TWS paper                               
+      63 +IBKR_CLIENT_ID=17                                              
+      64 +IBKR_MARKET_DATA_TYPE=1                 # 1 live, 3 delayed (fr
+         +ee)                                                            
+      65 +                                                               
+      66 +# --- For Polygon ---                                          
+      67 +POLYGON_API_KEY=your_key_here                                  
+      68 +                                                               
+      69  # Email delivery (Gmail app-password works)
+      70  SMTP_HOST=smtp.gmail.com
+      71  SMTP_PORT=587
+     ...
+       79  TELEGRAM_CHAT_ID=...
+       80  ```
+       81  
+       66 -### 2. Install dependencies                                   
+       82 +### 3. Install dependencies                                   
+       83  
+       84  ```bash
+       69 -uv sync                                                       
+       85 +uv sync                # base install                         
+       86 +uv sync --extra ibkr   # add this if using IBKR (pulls ib_asyn
+          +c)                                                            
+       87  ```
+       88  
+       72 -### 3. Smoke test (no emails sent)                            
+       89 +### 4. IBKR-specific setup (skip if using polygon or yfinance)
+       90  
+       91 +1. **Subscribe to OPRA** in IBKR Account Management -> User Se
+          +ttings -> Market Data Subscriptions:                          
+       92 +   - *US Securities Snapshot and Futures Value Bundle* (free i
+          +f commissions >= $30/mo, else $10/mo)                         
+       93 +   - *US Equity and Options Add-On Streaming Bundle* (~$1.50/m
+          +o non-pro) -- this covers OPRA                                
+       94 +   - For SPX/NDX index options: add *CBOE One US Add-On*      
+       95 +2. **Run IB Gateway** (recommended over TWS for scheduled runs
+          +):                                                            
+       96 +   - File -> Global Configuration -> API -> Settings          
+       97 +     - Enable ActiveX and Socket Clients: yes                 
+       98 +     - Socket port: 4001 (live) or 4002 (paper)               
+       99 +     - Read-Only API: yes                                     
+      100 +     - Trusted IPs: add `127.0.0.1`                           
+      101 +   - Log in with **live** credentials (market data subscriptio
+          +ns are bound to the live username).                           
+      102 +3. Leave IB Gateway running before each scheduled flow executi
+          +on.                                                           
+      103 +                                                              
+      104 +### 5. Smoke test (no emails sent)                            
+      105 +                                                              
+      106  ```bash
+      107  uv run python -m hongquant.flows.opex_risk --mode weekly --dry
+           -run
+      108  ```
+     ...
+      110  To force a provider for one run:
+      111  
+      112  ```bash
+      113 +uv run python -m hongquant.flows.opex_risk --mode weekly --dry
+          +-run --provider ibkr                                          
+      114  uv run python -m hongquant.flows.opex_risk --mode weekly --dry
+           -run --provider yfinance
+      115  ```
+      116  
+       84 -To smoke test only one underlier and avoid Yahoo rate limits: 
+      117 +To smoke test only one underlier:                             
+      118  
+      119  ```bash
+       87 -uv run python -m hongquant.flows.opex_risk --mode weekly --dry
+          --run --provider yfinance --underliers SPY                     
+      120 +uv run python -m hongquant.flows.opex_risk --mode weekly --dry
+          +-run --provider ibkr --underliers SPY                         
+      121  ```
+      122  
+       90 -### 4. Seed historical baseline (optional, improves OI compari
+          -son signal)                                                   
+      123 +### 6. Seed historical baseline (optional, improves OI compari
+          +son signal)                                                   
+      124  
+      125  After a few weeks of daily runs, the 12-week OI baseline auto-
+           populates. For a faster start, run the pulse mode daily for a 
+           few weeks:
+      126  
+
+● Now update resume_context.md to reflect the new IBKR option.
+
+● Update(dev_conversation/resume_context.md)
+  ⎿  Added 28 lines, removed 6 lines
+      54  
+      55  ### What still needs to happen before production
+      56  
+      57 -**Step 1 -- Add credentials to `.env`** (see `.env.example`):  
+      57 +**Step 1 -- Pick a data provider and add credentials to `.env`*
+         +* (see `.env.example`):                                        
+      58 +                                                               
+      59 +Three providers are supported via `OPTIONS_DATA_PROVIDER`:     
+      60 +- `ibkr` (recommended) -- live IV/Greeks/OI via IB Gateway, ~$1
+         +.50/mo OPRA subscription                                       
+      61 +- `polygon` -- paid HTTP API, ~$30+/mo                         
+      62 +- `yfinance` -- free dev fallback (slow, no Greeks)            
+      63 +                                                               
+      64  ```
+      59 -POLYGON_API_KEY=...       # required for all options data      
+      65 +# IBKR (recommended) -- requires `uv sync --extra ibkr` + IB Ga
+         +teway running + OPRA                                           
+      66 +OPTIONS_DATA_PROVIDER=ibkr                                     
+      67 +IBKR_HOST=127.0.0.1                                            
+      68 +IBKR_PORT=4001                   # gateway live; 4002 gateway p
+         +aper, 7497 TWS paper                                           
+      69 +IBKR_CLIENT_ID=17                                              
+      70 +IBKR_MARKET_DATA_TYPE=1          # 1 live, 3 delayed (free)    
+      71 +                                                               
+      72 +# OR Polygon                                                   
+      73 +POLYGON_API_KEY=...                                            
+      74 +                                                               
+      75 +# Email (required for weekly report)                           
+      76  SMTP_HOST=smtp.gmail.com
+      77  SMTP_PORT=587
+      78  SMTP_USER=...
+      63 -SMTP_PASSWORD=...         # Gmail: use an app password         
+      79 +SMTP_PASSWORD=...                # Gmail: use an app password  
+      80  SMTP_FROM=...
+      65 -SMTP_TO=...               # comma-separated recipients         
+      81 +SMTP_TO=...                      # comma-separated recipients  
+      82  ```
+      83  
+      84  **Step 2 -- Smoke test** (no emails sent):
+      85  ```bash
+      86 +# IBKR: requires IB Gateway running and logged in              
+      87 +uv run python -m hongquant.flows.opex_risk --mode weekly --dry-
+         +run --provider ibkr --underliers SPY                           
+      88 +                                                               
+      89 +# Or full weekly dry-run with whatever provider is set in .env:
+      90  uv run python -m hongquant.flows.opex_risk --mode weekly --dry-
+          run
+      91  ```
+      92  
+      73 -**Step 3 -- Verify Polygon plan covers index options** (SPX/NDX
+         - require a higher Polygon tier).                               
+      74 -Core ETFs (SPY, QQQ, SMH, SOXX) work on most paid plans.       
+      93 +**Step 3 -- Provider notes**:                                  
+      94 +- IBKR: log into IB Gateway with the **live** account (market-d
+         +ata subscriptions are per live username); the adapter sets `rea
+         +donly=True` on the connection so no orders can leak. SPX/NDX ne
+         +ed the CBOE One add-on.                                        
+      95 +- Polygon: SPX/NDX require a higher tier; SPY/QQQ/SMH/SOXX work
+         + on most paid plans.                                           
+      96 +- yfinance: Greeks are estimated locally via Black-Scholes; OI 
+         +for index ETFs is patchy. Use for dev only.                    
+      97  
+      98  **Step 4 -- Register Prefect schedules** (Prefect server runs v
+          ia `docker-compose up`):
+      99  ```bash
+
+● Bash(uv run ruff check . 2>&1 | tail -30)
+  ⎿  RUF012 Mutable default value for class attribute
+       --> tests/test_ibkr_options_adapter.py:76:27
+        |
+     … +9 lines (ctrl+o to expand)
+
+● Bash(uv run pytest -q 2>&1 | tail -30)
+  ⎿  ............................................................
+        [100%]
+     60 passed in 0.82s
+
+● 60/60 tests pass. One ruff finding — mutable class default; let me fix it.
+
+● Update(tests/test_ibkr_options_adapter.py)
+  ⎿  Added 1 line
+      3  import sys
+      4  import types
+      5  from datetime import date
+      6 +from typing import ClassVar                                     
+      7  
+      8  import pandas as pd
+      9  import pytest
+
+● Update(tests/test_ibkr_options_adapter.py)
+  ⎿  Added 1 line, removed 1 line
+      74      """Configurable mock IB; tests tweak class attributes befor
+          e constructing."""
+      75  
+      76      spot = 500.0
+      77 -    option_params: list = []                                   
+      77 +    option_params: ClassVar[list] = []                         
+      78      underlier_qualifies = True
+      79  
+      80      def __init__(self):
+
+● Bash(uv run ruff check . 2>&1 | tail -10 && echo "---" && uv run pytest -q
+      2>&1 | tail -5)
+  ⎿  All checks passed!
+     ---
+     ............................................................
+     … +2 lines (ctrl+o to expand)
+
+● Clean: ruff passes, 60/60 tests green.
+● Quick cleanup — the trailing _df_typing_smoke helper isn't needed; pandas
+  import can go too.
+
+● Update(tests/test_ibkr_options_adapter.py)
+  ⎿  Removed 1 line
+       5  from datetime import date
+       6  from typing import ClassVar
+       7  
+       8 -import pandas as pd                                            
+       8  import pytest
+       9  
+      10  from hongquant.options.adapters.polygon_options import CHAIN_CO
+          LUMNS
+
+● Update(tests/test_ibkr_options_adapter.py)
+  ⎿  Removed 4 lines
+      216      df = fetch_chain_snapshot("UNKNOWN")
+      217      assert df.empty
+      218      assert list(df.columns) == CHAIN_COLUMNS
+      219 -                                                              
+      220 -                                                              
+      221 -def _df_typing_smoke():  # silence "pandas imported" lint warn
+          -ing                                                           
+      222 -    return pd.DataFrame()                                     
+
+● Bash(uv run ruff check . 2>&1 | tail -5 && echo "---" && uv run pytest -q 2>&1
+       | tail -5)
+  ⎿  All checks passed!
+     ---
+     ............................................................
+     … +2 lines (ctrl+o to expand)
+
+● All green. Summary of what shipped:
+
+  New code
+  - hongquant/options/adapters/ibkr_options.py — fetch_chain_snapshot() using
+  ib_async; opens IB Gateway connection per call, qualifies underlier (Stock or
+  Index), pulls strikes/expirations via reqSecDefOptParams, batches option
+  contracts at 50/req via reqTickers, normalizes to canonical CHAIN_COLUMNS.
+  Read-only.
+  - tests/test_ibkr_options_adapter.py — 6 tests, fully mocked (no IB Gateway
+  needed).
+
+  Wiring
+  - hongquant/flows/opex_risk.py — added elif provider == "ibkr" branch and
+  "ibkr" CLI choice.
+  - hongquant/config.py — added ibkr_market_data_type Setting (default 1 =
+  live).
+  - .env.example — documented IBKR_MARKET_DATA_TYPE and updated provider list.
+
+  Docs
+  - src/option_watch/README.md — provider comparison table + IBKR setup steps
+  (OPRA subscription, Gateway config).
+  - dev_conversation/resume_context.md — updated Step 1/2/3 for three-provider
+  world.
+
+  Your next actions (manual, off-Claude):
+  1. uv sync --extra ibkr
+  2. Subscribe to OPRA in IBKR Account Management
+  3. Configure IB Gateway (live, port 4001, Read-Only API on)
+  4. Set OPTIONS_DATA_PROVIDER=ibkr and IBKR_PORT=4001 in .env
+  5. Smoke test: uv run python -m hongquant.flows.opex_risk --mode weekly 
+  --dry-run --provider ibkr --underliers SPY
+
+  Verification: uv run ruff check . clean, uv run pytest -q = 60/60 (was 54).
+
+✻ Cogitated for 8m 27s
+
+❯ /usage 
+  ⎿  Settings dialog dismissed
