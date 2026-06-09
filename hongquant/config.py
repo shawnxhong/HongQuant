@@ -6,7 +6,6 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
@@ -54,6 +53,11 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     deepseek_api_key: str | None = Field(None, alias="DEEPSEEK_API_KEY")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
+
+    # Fragility radar — LLM narrative layer (consumes pre-computed features only)
+    fragility_enable_llm: bool = Field(True, alias="FRAGILITY_ENABLE_LLM")
+    fragility_llm_provider: str = Field("anthropic", alias="FRAGILITY_LLM_PROVIDER")
+    fragility_llm_model: str = Field("claude-opus-4-8", alias="FRAGILITY_LLM_MODEL")
 
     telegram_bot_token: str | None = Field(None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str | None = Field(None, alias="TELEGRAM_CHAT_ID")

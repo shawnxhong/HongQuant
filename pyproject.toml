@@ -28,6 +28,10 @@ dependencies = [
     "ccxt>=4.3",
     "edgartools>=3.0",
     "fredapi>=0.5",
+    "cot_reports>=0.1",
+    # LLM narrative layer — small SDK (httpx/pydantic only); heavier RAG libs
+    # (langchain, lancedb, ...) stay in the optional `llm` extra.
+    "anthropic>=0.69",
 ]
 
 [project.optional-dependencies]

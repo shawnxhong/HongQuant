@@ -86,3 +86,13 @@ momentum_watchlist:
   - ANET
   - CRWD
   - MSTR
+
+# Trend flash-crash radar — themed clusters.
+# Clusters drive the intra-theme correlation-cascade signal (Pillar C). Keep
+# each cluster a coherent co-moving theme so a spike in within-cluster
+# correlation is meaningful.
+fragility_clusters:
+  gold_complex: [GLD, SLV, GDX]
+  ai_semis:     [NVDA, AVGO, AMD, SMH, SOXX, ARM, MU, TSM]
+  megacap_tech: [AAPL, MSFT, GOOGL, AMZN, META, NFLX, TSLA]
+  korea:        [EWY]
