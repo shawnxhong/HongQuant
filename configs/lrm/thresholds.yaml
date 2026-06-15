@@ -1,0 +1,48 @@
+# Liquidity Regime Monitor — state-machine, water-levels, alert rules.
+#
+# All values are PRE-COMMITTED PRIORS (spec §1, §4.3, appendix). Shawn audits
+# them once before freezing and does not adjust them mid-regime. Thresholds have
+# no evidence status until the 6-month shadow run completes (spec §10).
+
+state_machine:
+  neutral_band: 0.25        # |score| < this -> hold prior direction (hysteresis)
+  strong_confirm: 0.50      # single-month |score| >= this flips a direction
+  two_month_confirm: 0.25   # two consecutive same-sign months >= this flips
+  emergency_downgrade_requires_human: true
+
+# Quadrant -> water level (active 15% satellite sleeve only; core 85% untouched).
+water_levels:
+  Q1: {sleeve_max_pct: 15, leverage_max: 1.2, fragility_mult: 1.0}  # 顺风 L↑R↑
+  Q2: {sleeve_max_pct: 10, leverage_max: 1.0, fragility_mult: 1.0}  # 托底回撤 L↑R↓
+  Q3: {sleeve_max_pct: 10, leverage_max: 1.0, fragility_mult: 1.5}  # 余热 L↓R↑
+  Q4: {sleeve_max_pct: 5,  leverage_max: 1.0, fragility_mult: 1.5}  # 双杀 L↓R↓
+
+plumbing:
+  reserves_gdp_yellow: 0.10   # warn below 10%
+  reserves_gdp_red: 0.09      # alarm below 9% (2019-09 repo crisis was ~7%)
+
+# Per-component staleness budget in days; a component older than its budget is
+# dropped from the composite and the remaining weights renormalize (spec §3).
+staleness_budget_days:
+  default: 10
+  net_liquidity: 14
+  reserves: 14
+  global_cb: 45
+  china_credit: 45
+  margin_debt: 45
+  implied_path: 14
+
+# Daily interrupt rules (spec §6). bp thresholds assume the FRED series is in
+# percent, so the engine multiplies the raw change by 100 to get basis points.
+# Rules whose source is a stub (#3 SRF, #11 CB RSS, #12 vol-system) are omitted
+# until those adapters land.
+alerts:
+  - {id: 1,  name: sofr_iorb_3d,          level: plumbing_yellow,  kind: spread_streak,   a: SOFR, b: IORB, days: 3,                downgrade: false}
+  - {id: 2,  name: sofr_iorb_10bp,        level: plumbing_red,     kind: spread_level_bp, a: SOFR, b: IORB, bp: 10,                 downgrade: true}
+  - {id: 4,  name: discount_window_2sig,  level: bank_stress,      kind: zscore_jump,     series: WLCFLPCL, sigma: 2.0, window: 260, downgrade: false}
+  - {id: 5,  name: hy_oas_50bp_10d,       level: credit_red,       kind: change_bp,       series: BAMLH0A0HYM2, window: 10, bp: 50, downgrade: true}
+  - {id: 6,  name: hy_oas_25bp_10d,       level: credit_yellow,    kind: change_bp,       series: BAMLH0A0HYM2, window: 10, bp: 25, downgrade: false}
+  - {id: 7,  name: dollar_2p5pct_5d,      level: dollar_shock,     kind: pct_change_up,   series: DTWEXBGS, window: 5, pct: 2.5,    downgrade: false}
+  - {id: 8,  name: usdjpy_3pct_5d,        level: carry_funding,    kind: abs_pct_change,  series: DEXJPUS, window: 5, pct: 3.0,     downgrade: false}
+  - {id: 9,  name: audjpy_ndx_divergence, level: carry_divergence, kind: audjpy_ndx,      window: 10, audjpy_pct: -4.0, ndx_min: 0.0, downgrade: false}
+  - {id: 10, name: stablecoin_3pct_7d,    level: crypto_riskoff,   kind: pct_change_down, series: STABLECOIN_MCAP, window: 7, pct: 3.0, downgrade: false}

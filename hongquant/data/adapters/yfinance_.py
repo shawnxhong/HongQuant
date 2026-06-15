@@ -1,8 +1,8 @@
 """yfinance adapter — free, used as cross-check and backfill."""
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
 
 import pandas as pd
 
@@ -41,7 +41,12 @@ def fetch_ohlcv(
     frames: list[pd.DataFrame] = []
     if len(tickers) == 1:
         df = raw.copy()
-        df.columns = [c.lower() if isinstance(c, str) else c for c in df.columns]
+        if isinstance(df.columns, pd.MultiIndex):
+            if tickers[0] in df.columns.get_level_values(0):
+                df = df[tickers[0]].copy()
+            elif tickers[0] in df.columns.get_level_values(-1):
+                df = df.xs(tickers[0], axis=1, level=-1).copy()
+        df.columns = [str(c).lower() for c in df.columns]
         frames.append(
             normalize_ohlcv(
                 df,

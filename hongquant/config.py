@@ -52,12 +52,19 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     deepseek_api_key: str | None = Field(None, alias="DEEPSEEK_API_KEY")
+    deepseek_model: str = Field("deepseek-chat", alias="DEEPSEEK_MODEL")
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
 
     # Fragility radar — LLM narrative layer (consumes pre-computed features only)
     fragility_enable_llm: bool = Field(True, alias="FRAGILITY_ENABLE_LLM")
     fragility_llm_provider: str = Field("anthropic", alias="FRAGILITY_LLM_PROVIDER")
     fragility_llm_model: str = Field("claude-opus-4-8", alias="FRAGILITY_LLM_MODEL")
+    anthropic_self_check_model: str | None = Field(None, alias="ANTHROPIC_SELF_CHECK_MODEL")
+
+    # Liquidity Regime Monitor — advisory reaction-function LLM (default off:
+    # the mechanical state machine and report never depend on it).
+    lrm_enable_llm: bool = Field(False, alias="LRM_ENABLE_LLM")
+    lrm_llm_model: str = Field("claude-opus-4-8", alias="LRM_LLM_MODEL")
 
     telegram_bot_token: str | None = Field(None, alias="TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str | None = Field(None, alias="TELEGRAM_CHAT_ID")
@@ -68,6 +75,10 @@ class Settings(BaseSettings):
     smtp_password: str | None = Field(None, alias="SMTP_PASSWORD")
     smtp_from: str | None = Field(None, alias="SMTP_FROM")
     smtp_to: str | None = Field(None, alias="SMTP_TO")  # comma-separated
+
+    self_check_total_timeout_seconds: int = Field(300, alias="SELF_CHECK_TOTAL_TIMEOUT_SECONDS")
+    self_check_source_timeout_seconds: int = Field(30, alias="SELF_CHECK_SOURCE_TIMEOUT_SECONDS")
+    self_check_llm_timeout_seconds: int = Field(45, alias="SELF_CHECK_LLM_TIMEOUT_SECONDS")
 
     postgres_host: str = Field("localhost", alias="POSTGRES_HOST")
     postgres_port: int = Field(5432, alias="POSTGRES_PORT")

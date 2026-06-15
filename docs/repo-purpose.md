@@ -7,7 +7,6 @@ It is being built to support a mid/low-frequency investment workflow across:
 
 - US equities and ETFs
 - Macro data and SEC filings as supporting research inputs
-- Crypto spot markets
 
 The repo is not intended to be a generic quant platform, a broker-integrated execution system, or a product for external users.
 Its purpose is to give one investor a maintainable local codebase that can:

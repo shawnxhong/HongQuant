@@ -1,0 +1,10 @@
+# FOMC dot-plot medians — manual quarterly update (a 5-minute task after each SEP).
+# Used to compute the implied-path-vs-dots gap once the FedWatch adapter lands
+# (pass 2). Until then the L composite uses the DGS2-EFFR proxy and this file is
+# only read for the report header. Source: federalreserve.gov SEP.
+as_of: 2026-03-19          # date of the SEP these medians came from
+median_dots:               # year -> median projected fed funds rate (%)
+  2026: 3.875
+  2027: 3.375
+  2028: 3.125
+  longer_run: 3.000

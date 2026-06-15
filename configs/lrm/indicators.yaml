@@ -1,0 +1,79 @@
+# Liquidity Regime Monitor — indicator definitions (spec §3, §4.1).
+#
+# These are FROZEN PRIORS, not tunables. Weights are a judgement call audited
+# once a year; never optimize them against returns (spec §1.4). NetLiq weight is
+# capped at 0.20 (spec §1.3) — config_load enforces it.
+#
+# Component fields:
+#   key        unique id used in composites/report
+#   source     fred | derived | globalcb | defillama | ipo_rel | treasury
+#              | akshare_cn | finra | mof_jp | nyfed
+#   series     FRED id, or a derived expression of FRED ids (+ - *), or token
+#   op         delta (diff over N) | pct_change (pct over N) | level (identity)
+#   periods    lookback in observations at the series' native frequency
+#   sign       +1 / -1 so that positive = expansion / risk-on (spec §3 note)
+#   weight     prior weight within its composite (each composite sums to 1.0)
+#   frequency  daily | weekly | monthly | quarterly  -> picks z-window defaults
+#   enabled    false = stub/deferred source; dropped and renormalized
+
+# ---------------------------------------------------------------------------
+# Raw series to pull into the vintage store each run.
+# ---------------------------------------------------------------------------
+series_catalog:
+  - {id: DFII10,       source: fred, frequency: daily}      # 10Y TIPS real rate
+  - {id: DGS2,         source: fred, frequency: daily}      # 2Y UST yield
+  - {id: EFFR,         source: fred, frequency: daily}      # effective fed funds
+  - {id: T10Y2Y,       source: fred, frequency: daily}      # 2s10s (context)
+  - {id: T5YIFR,       source: fred, frequency: daily}      # 5y5y inflation (context)
+  - {id: WALCL,        source: fred, frequency: weekly}     # Fed total assets
+  - {id: WTREGEN,      source: fred, frequency: weekly}     # TGA (weekly)
+  - {id: RRPONTSYD,    source: fred, frequency: daily}      # ON RRP
+  - {id: WRESBAL,      source: fred, frequency: weekly}     # reserve balances
+  - {id: SOFR,         source: fred, frequency: daily}      # SOFR
+  - {id: IORB,         source: fred, frequency: daily}      # interest on reserves
+  - {id: WLCFLPCL,     source: fred, frequency: weekly}     # discount window primary credit
+  - {id: GDP,          source: fred, frequency: quarterly}  # nominal GDP (for Reserves/GDP)
+  - {id: BAMLH0A0HYM2, source: fred, frequency: daily}      # HY OAS
+  - {id: BAMLC0A0CM,   source: fred, frequency: daily}      # IG OAS (context)
+  - {id: BAMLH0A3HYC,  source: fred, frequency: daily}      # CCC OAS
+  - {id: BAMLH0A1HYBB, source: fred, frequency: daily}      # BB OAS
+  - {id: DRTSCILM,     source: fred, frequency: quarterly}  # SLOOS C&I standards (context)
+  - {id: DTWEXBGS,     source: fred, frequency: daily}      # broad USD index
+  - {id: DEXJPUS,      source: fred, frequency: daily}      # JPY per USD
+  - {id: DEXUSAL,      source: fred, frequency: daily}      # USD per AUD
+  - {id: DEXCHUS,      source: fred, frequency: daily}      # CNY per USD (context)
+  - {id: ECBASSETSW,   source: fred, frequency: weekly}     # ECB assets (EUR)
+  - {id: JPNASSETS,    source: fred, frequency: monthly}    # BoJ assets (JPY)
+  - {id: STABLECOIN_MCAP, source: defillama, frequency: daily}
+  - {id: IPO,          source: yfinance, frequency: daily, ticker: "IPO"}
+  - {id: SPY,          source: yfinance, frequency: daily, ticker: "SPY"}
+  - {id: NDX,          source: yfinance, frequency: daily, ticker: "^NDX"}
+
+# ---------------------------------------------------------------------------
+# L composite — liquidity / price of money (spec §4.1). Weights sum to 1.00.
+# ---------------------------------------------------------------------------
+l_composite:
+  - {key: real_rate,    label: "10Y TIPS real rate (DFII10)",        source: fred,    series: DFII10,                 op: delta,      periods: 63, sign: -1, weight: 0.25, frequency: daily}
+  - {key: net_liquidity, label: "Net liquidity (WALCL-TGA-RRP)",     source: derived, series: "WALCL-WTREGEN-RRPONTSYD", op: delta,    periods: 13, sign: 1,  weight: 0.20, frequency: weekly}
+  - {key: reserves,     label: "Reserve balances (WRESBAL)",         source: fred,    series: WRESBAL,                op: delta,      periods: 13, sign: 1,  weight: 0.10, frequency: weekly}
+  - {key: dollar,       label: "Broad USD index (DTWEXBGS)",         source: fred,    series: DTWEXBGS,               op: pct_change, periods: 63, sign: -1, weight: 0.15, frequency: daily}
+  - {key: global_cb,    label: "Global CB balance sheets",           source: globalcb, series: "WALCL,ECBASSETSW,JPNASSETS", op: level, periods: 63, sign: 1, weight: 0.10, frequency: weekly}
+  - {key: china_credit, label: "China credit impulse (TSF/GDP)",     source: akshare_cn, series: CN_CREDIT_IMPULSE,    op: level,      periods: 3,  sign: 1,  weight: 0.10, frequency: monthly, enabled: false}
+  - {key: implied_path, label: "Implied 12m path (proxy DGS2-EFFR)", source: derived, series: "DGS2-EFFR",            op: delta,      periods: 21, sign: -1, weight: 0.10, frequency: daily, proxy: true}
+
+# ---------------------------------------------------------------------------
+# R composite — private risk-taking (spec §4.1). Weights sum to 1.00.
+# ---------------------------------------------------------------------------
+r_composite:
+  - {key: hy_oas,      label: "HY OAS (BAMLH0A0HYM2)",        source: fred,    series: BAMLH0A0HYM2,            op: delta,      periods: 63, sign: -1, weight: 0.35, frequency: daily}
+  - {key: stablecoin,  label: "Stablecoin total mcap",        source: defillama, series: STABLECOIN_MCAP,        op: pct_change, periods: 21, sign: 1,  weight: 0.15, frequency: daily}
+  - {key: audjpy,      label: "AUD/JPY (DEXUSAL*DEXJPUS)",    source: derived, series: "DEXUSAL*DEXJPUS",        op: pct_change, periods: 63, sign: 1,  weight: 0.15, frequency: daily}
+  - {key: margin_debt, label: "FINRA margin debt YoY",        source: finra,   series: MARGIN_DEBT,             op: pct_change, periods: 12, sign: 1,  weight: 0.15, frequency: monthly, enabled: false}
+  - {key: ipo_window,  label: "IPO ETF 3m relative to SPY",   source: ipo_rel, series: "IPO/SPY",               op: pct_change, periods: 63, sign: 1,  weight: 0.10, frequency: daily}
+  - {key: ccc_bb,      label: "CCC-BB spread",                source: derived, series: "BAMLH0A3HYC-BAMLH0A1HYBB", op: delta,    periods: 63, sign: -1, weight: 0.10, frequency: daily}
+
+# Weights from config: globalcb USD-size weights for the 3m-growth blend.
+globalcb_weights:
+  WALCL: 0.55
+  ECBASSETSW: 0.30
+  JPNASSETS: 0.15

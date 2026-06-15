@@ -43,17 +43,14 @@ us_stocks_watchlist:
   - NVDA
   - GOOGL
   - AMZN
-  - META
   - TSLA
   - AVGO
   - AMD
-  - NFLX
-
-crypto_spot:
-  # ccxt symbol notation (base/quote).
-  - BTC/USDT
-  - ETH/USDT
-  - SOL/USDT
+  - INTC
+  - MRVL
+  - MU
+  - SPCX
+  - NOK
 
 fred_series:
   - DGS2          # 2Y Treasury
@@ -77,7 +74,6 @@ momentum_watchlist:
   - AVGO
   - AMD
   - MSFT
-  - META
   - AMZN
   - GOOGL
   - TSLA
