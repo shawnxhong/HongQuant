@@ -17,7 +17,6 @@ from datetime import date
 
 from prefect import flow, task
 
-from ..email import send_email
 from ..liquidity import alerts as alerts_mod
 from ..liquidity import report as report_mod
 from ..liquidity import statecard, store
@@ -27,7 +26,7 @@ from ..liquidity.ingest import ingest_catalog
 from ..liquidity.llm import runner as llm_runner
 from ..liquidity.regime import compute_regime, suggest_downgrade
 from ..logging import logger, setup_logging
-from ..notify import notify
+from ..notify import notify, notify_email
 
 
 @task(retries=2, retry_delay_seconds=30)
@@ -112,7 +111,7 @@ def _run_monthly(*, dry_run: bool, use_llm: bool) -> None:
         logger.info("DRY RUN — state card:\n{}", json.dumps(card, ensure_ascii=False, indent=2))
         return
     statecard.write_state_card(card)
-    send_email(subject, body)
+    notify_email(subject, body)
     notify(tg)
 
 

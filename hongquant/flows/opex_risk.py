@@ -18,9 +18,8 @@ import pandas as pd
 from prefect import flow, task
 
 from ..config import get_settings
-from ..email import send_email
 from ..logging import logger, setup_logging
-from ..notify import notify
+from ..notify import notify, notify_email
 from ..options import metrics as m
 from ..options import store as opt_store
 from ..options.events import EventCalendar
@@ -183,7 +182,7 @@ def deliver(
         logger.info("DRY RUN — telegram body:\n{}", tg_body)
         return
     if "email" in channels:
-        send_email(subject, email_body)
+        notify_email(subject, email_body)
     if "telegram" in channels:
         notify(tg_body)
 

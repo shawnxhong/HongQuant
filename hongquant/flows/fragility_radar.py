@@ -26,10 +26,9 @@ from prefect import flow, task
 from ..data import store as price_store
 from ..data.adapters import cot as cot_adapter
 from ..data.adapters import yfinance_ as yfa
-from ..email import send_email
 from ..llm.agents import fragility_redteam
 from ..logging import logger, setup_logging
-from ..notify import notify
+from ..notify import notify, notify_email
 from ..options.events import EventCalendar
 from ..options.expiries import front_friday, next_friday
 from ..universe import Universe, load_universe
@@ -215,7 +214,7 @@ def _deliver(subject: str, email_body: str, tg_body: str, *, channels: list[str]
     if "telegram" in channels:
         notify(tg_body)
     if "email" in channels:
-        send_email(subject, email_body)
+        notify_email(subject, email_body)
 
 
 def _run(

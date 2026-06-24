@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     fmp_api_key: str | None = Field(None, alias="FMP_API_KEY")
     finnhub_api_key: str | None = Field(None, alias="FINNHUB_API_KEY")
     tiingo_api_key: str | None = Field(None, alias="TIINGO_API_KEY")
+    alphavantage_api_key: str | None = Field(None, alias="ALPHAVANTAGE_API_KEY")
+    twelvedata_api_key: str | None = Field(None, alias="TWELVEDATA_API_KEY")
 
     anthropic_api_key: str | None = Field(None, alias="ANTHROPIC_API_KEY")
     deepseek_api_key: str | None = Field(None, alias="DEEPSEEK_API_KEY")
@@ -65,16 +67,6 @@ class Settings(BaseSettings):
     # the mechanical state machine and report never depend on it).
     lrm_enable_llm: bool = Field(False, alias="LRM_ENABLE_LLM")
     lrm_llm_model: str = Field("claude-opus-4-8", alias="LRM_LLM_MODEL")
-
-    telegram_bot_token: str | None = Field(None, alias="TELEGRAM_BOT_TOKEN")
-    telegram_chat_id: str | None = Field(None, alias="TELEGRAM_CHAT_ID")
-
-    smtp_host: str | None = Field(None, alias="SMTP_HOST")
-    smtp_port: int = Field(587, alias="SMTP_PORT")
-    smtp_user: str | None = Field(None, alias="SMTP_USER")
-    smtp_password: str | None = Field(None, alias="SMTP_PASSWORD")
-    smtp_from: str | None = Field(None, alias="SMTP_FROM")
-    smtp_to: str | None = Field(None, alias="SMTP_TO")  # comma-separated
 
     self_check_total_timeout_seconds: int = Field(300, alias="SELF_CHECK_TOTAL_TIMEOUT_SECONDS")
     self_check_source_timeout_seconds: int = Field(30, alias="SELF_CHECK_SOURCE_TIMEOUT_SECONDS")

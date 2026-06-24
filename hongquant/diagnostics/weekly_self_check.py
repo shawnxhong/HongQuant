@@ -2,8 +2,8 @@
 
 This module is intentionally separate from Prefect flows: it probes small,
 cheap samples from each configured external dependency, records latency, and
-optionally sends a concise Telegram + email summary. It does not write to the
-data lake or run full production flows.
+prints a concise summary to stdout for the Hermes agent to dispatch. It does
+not write to the data lake or run full production flows.
 """
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import argparse
 import concurrent.futures
 import json
 import math
-import smtplib
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
@@ -22,7 +21,6 @@ import httpx
 import pandas as pd
 
 from ..config import get_settings
-from ..email import send_email
 from ..logging import setup_logging
 
 Status = str
@@ -279,42 +277,6 @@ def _check_deepseek() -> str:
     return f"model={_setting('deepseek_model', 'deepseek-chat')}"
 
 
-def _send_telegram_summary(text: str) -> bool:
-    if not _setting("telegram_bot_token") or not _setting("telegram_chat_id"):
-        return False
-    url = f"https://api.telegram.org/bot{_setting('telegram_bot_token')}/sendMessage"
-    resp = httpx.post(
-        url,
-        data={"chat_id": _setting("telegram_chat_id"), "text": text, "parse_mode": "Markdown"},
-        timeout=10.0,
-    )
-    resp.raise_for_status()
-    return True
-
-
-def _check_telegram_config() -> str:
-    return "Telegram config present"
-
-
-def _check_smtp_login() -> str:
-    if not all([
-        _setting("smtp_host"),
-        _setting("smtp_user"),
-        _setting("smtp_password"),
-        _setting("smtp_from"),
-        _setting("smtp_to"),
-    ]):
-        raise RuntimeError("SMTP is not fully configured")
-    recipients = [r.strip() for r in (_setting("smtp_to") or "").split(",") if r.strip()]
-    if not recipients:
-        raise RuntimeError("SMTP_TO has no recipients")
-    with smtplib.SMTP(_setting("smtp_host"), _setting("smtp_port", 587), timeout=30) as server:
-        server.ehlo()
-        server.starttls()
-        server.login(_setting("smtp_user"), _setting("smtp_password"))
-    return f"SMTP login ok, recipients={len(recipients)}"
-
-
 def _selected_options_check(provider: str) -> tuple[str, Callable[[], str]]:
     if provider == "polygon":
         return "options_polygon", _check_polygon_options
@@ -333,14 +295,6 @@ def _build_checks(strict_optional: bool) -> list[tuple[str, str, bool, Callable[
         ("edgar", "data", True, _check_edgar, ["EDGAR_USER_AGENT"]),
         ("anthropic", "llm", True, _check_anthropic, ["ANTHROPIC_API_KEY"]),
         ("deepseek", "llm", True, _check_deepseek, ["DEEPSEEK_API_KEY"]),
-        ("telegram_config", "notify", True, _check_telegram_config, ["TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID"]),
-        (
-            "smtp_login",
-            "notify",
-            True,
-            _check_smtp_login,
-            ["SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM", "SMTP_TO"],
-        ),
     ]
     opt_name, opt_func = _selected_options_check(provider)
     opt_missing = ["POLYGON_API_KEY"] if provider == "polygon" else []
@@ -366,23 +320,15 @@ def _missing_env_for(names: list[str]) -> list[str]:
         "EDGAR_USER_AGENT": _setting("edgar_user_agent"),
         "ANTHROPIC_API_KEY": _setting("anthropic_api_key"),
         "DEEPSEEK_API_KEY": _setting("deepseek_api_key"),
-        "SMTP_HOST": _setting("smtp_host"),
-        "SMTP_USER": _setting("smtp_user"),
-        "SMTP_PASSWORD": _setting("smtp_password"),
-        "SMTP_FROM": _setting("smtp_from"),
-        "SMTP_TO": _setting("smtp_to"),
         "ALPACA_API_KEY": _setting("alpaca_api_key"),
         "ALPACA_API_SECRET": _setting("alpaca_api_secret"),
         "POLYGON_API_KEY": _setting("polygon_api_key"),
-        "TELEGRAM_BOT_TOKEN": _setting("telegram_bot_token"),
-        "TELEGRAM_CHAT_ID": _setting("telegram_chat_id"),
     }
     return [name for name in names if not _has(values.get(name))]
 
 
 def run_weekly_self_check(
     *,
-    send_notifications: bool = True,
     strict_optional: bool = False,
 ) -> SelfCheckReport:
     setup_logging()
@@ -431,8 +377,6 @@ def run_weekly_self_check(
         },
     )
 
-    if send_notifications:
-        _deliver_summary(report)
     return report
 
 
@@ -478,35 +422,9 @@ def render_summary(report: SelfCheckReport) -> str:
     return "\n".join(lines)
 
 
-def _deliver_summary(report: SelfCheckReport) -> None:
-    text = render_summary(report)
-    telegram = timed_check(
-        "telegram_send",
-        "notify",
-        True,
-        lambda: "sent" if _send_telegram_summary(text) else "not sent",
-        timeout_seconds=15,
-    )
-    report.checks.append(telegram)
-    subject = f"[HongQuant Self-Check: {report.overall_status}] {datetime.now(tz=UTC).date()}"
-    email_ok = send_email(subject, text)
-    report.checks.append(
-        CheckResult(
-            name="email_send",
-            category="notify",
-            required=True,
-            status="PASS" if email_ok else "FAIL",
-            message="sent" if email_ok else "send_email returned False",
-        )
-    )
-    if telegram.status != "PASS" or not email_ok:
-        report.overall_status = "FAIL"
-
-
 def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="HongQuant weekly external dependency self-check")
     p.add_argument("--json", action="store_true", help="Print machine-readable JSON")
-    p.add_argument("--no-notify", action="store_true", help="Do not send Telegram/email summary")
     p.add_argument(
         "--strict-optional",
         action="store_true",
@@ -517,10 +435,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
-    report = run_weekly_self_check(
-        send_notifications=not args.no_notify,
-        strict_optional=args.strict_optional,
-    )
+    report = run_weekly_self_check(strict_optional=args.strict_optional)
     if args.json:
         print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2, default=str))
     else:

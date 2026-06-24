@@ -15,14 +15,6 @@ class _Settings:
     fragility_llm_model = "claude-opus-4-8"
     deepseek_api_key = "deepseek-secret"
     deepseek_model = "deepseek-chat"
-    telegram_bot_token = "telegram-secret"
-    telegram_chat_id = "chat-id"
-    smtp_host = "smtp.example.com"
-    smtp_port = 587
-    smtp_user = "user@example.com"
-    smtp_password = "smtp-secret"
-    smtp_from = "from@example.com"
-    smtp_to = "to@example.com"
     alpaca_api_key = None
     alpaca_api_secret = None
     polygon_api_key = None
@@ -45,8 +37,6 @@ def _patch_successful_required_checks(monkeypatch):
         "_check_edgar",
         "_check_anthropic",
         "_check_deepseek",
-        "_check_telegram_config",
-        "_check_smtp_login",
         "_check_yfinance_options",
         "_check_ccxt_public",
     ):
@@ -61,7 +51,7 @@ def test_missing_required_env_fails_without_calling_network(monkeypatch):
     _patch_settings(monkeypatch, Missing())
     _patch_successful_required_checks(monkeypatch)
 
-    report = w.run_weekly_self_check(send_notifications=False)
+    report = w.run_weekly_self_check()
 
     assert report.overall_status == "FAIL"
     failed = {c.name: c for c in report.checks if c.status == "FAIL"}
@@ -73,7 +63,7 @@ def test_optional_sources_skip_when_unconfigured(monkeypatch):
     _patch_settings(monkeypatch)
     _patch_successful_required_checks(monkeypatch)
 
-    report = w.run_weekly_self_check(send_notifications=False)
+    report = w.run_weekly_self_check()
 
     assert report.overall_status == "PASS"
     skipped = {c.name for c in report.checks if c.status == "SKIP"}
@@ -89,7 +79,7 @@ def test_selected_polygon_provider_requires_polygon_key(monkeypatch):
     _patch_settings(monkeypatch, PolygonSelected())
     _patch_successful_required_checks(monkeypatch)
 
-    report = w.run_weekly_self_check(send_notifications=False)
+    report = w.run_weekly_self_check()
 
     assert report.overall_status == "FAIL"
     polygon = next(c for c in report.checks if c.name == "options_polygon")
@@ -102,7 +92,7 @@ def test_strict_optional_promotes_optional_missing_to_failure(monkeypatch):
     _patch_settings(monkeypatch)
     _patch_successful_required_checks(monkeypatch)
 
-    report = w.run_weekly_self_check(send_notifications=False, strict_optional=True)
+    report = w.run_weekly_self_check(strict_optional=True)
 
     assert report.overall_status == "FAIL"
     alpaca = next(c for c in report.checks if c.name == "alpaca")
@@ -110,33 +100,15 @@ def test_strict_optional_promotes_optional_missing_to_failure(monkeypatch):
     assert alpaca.status == "FAIL"
 
 
-def test_notifications_are_sent_when_enabled(monkeypatch):
-    sent = {"telegram": 0, "email": 0}
-
-    _patch_settings(monkeypatch)
-    _patch_successful_required_checks(monkeypatch)
-    monkeypatch.setattr(w, "_send_telegram_summary", lambda text: sent.__setitem__("telegram", sent["telegram"] + 1) or True)
-    monkeypatch.setattr(w, "send_email", lambda subject, body: sent.__setitem__("email", sent["email"] + 1) or True)
-
-    report = w.run_weekly_self_check(send_notifications=True)
-
-    assert report.overall_status == "PASS"
-    assert sent == {"telegram": 1, "email": 1}
-    assert any(c.name == "telegram_send" and c.status == "PASS" for c in report.checks)
-    assert any(c.name == "email_send" and c.status == "PASS" for c in report.checks)
-
-
 def test_report_json_does_not_include_secret_values(monkeypatch):
     _patch_settings(monkeypatch)
     _patch_successful_required_checks(monkeypatch)
 
-    report = w.run_weekly_self_check(send_notifications=False)
+    report = w.run_weekly_self_check()
     payload = json.dumps(report.to_dict())
 
     assert "deepseek-secret" not in payload
     assert "anthropic-secret" not in payload
-    assert "smtp-secret" not in payload
-    assert "telegram-secret" not in payload
 
 
 def test_render_summary_includes_problem_checks():
